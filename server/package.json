@@ -1,0 +1,29 @@
+{
+  "name": "@examshuffle/server",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "cli": "tsx src/cli.ts",
+    "sample": "tsx scripts/make-sample.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^1.9.0",
+    "@napi-rs/canvas": "^0.1.65",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "multer": "^2.0.1",
+    "pdfjs-dist": "^4.7.76",
+    "puppeteer": "^24.10.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4"
+  }
+}

@@ -6,6 +6,12 @@ node_modules/
 
 # pipeline output
 output/
+server/output/
+server/uploads/
+web/dist/
+
+# local test exams
+first_test.pdf
 
 # OS noise
 Thumbs.db

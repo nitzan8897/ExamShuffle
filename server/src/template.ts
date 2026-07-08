@@ -1,68 +1,61 @@
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import type { ShuffledExam, ShuffledQuestion } from "./types.js";
 
-const CSS_PATH = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "templates",
-  "exam.css"
-);
+const CSS_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "templates", "exam.css");
 
-const escapeHtml = (s) =>
-  String(s ?? "")
+const escapeHtml = (s: string): string =>
+  s
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 
-/**
- * Question/option fields arrive as minimal HTML fragments (tables, <sup>/<sub>,
- * MathML) so the original form is preserved verbatim. Rendered as-is after
- * stripping anything executable.
- */
-const sanitizeFragment = (s) =>
-  String(s ?? "")
+const sanitizeFragment = (s: string): string =>
+  s
     .replace(/<\s*(script|style|iframe|object|embed|link|meta)\b[\s\S]*?(<\s*\/\s*\1\s*>|$)/gi, "")
     .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
     .replace(/(href|src)\s*=\s*("javascript:[^"]*"|'javascript:[^']*')/gi, "");
 
-/** Split an array into chunks of n (used to force 2 questions per page). */
-const chunk = (arr, n) =>
+const chunk = <T,>(arr: T[], n: number): T[][] =>
   Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
 
-const HE = {
+interface Labels {
+  answerKey: string;
+  question: string;
+  why: string;
+  whyNot: string;
+  subtitle: string;
+}
+
+const HE: Labels = {
   answerKey: "מפתח תשובות",
   question: "שאלה",
-  correctAnswer: "התשובה הנכונה",
   why: "הסבר",
   whyNot: "מדוע שאר האפשרויות שגויות",
   subtitle: "גרסה מעורבלת",
 };
 
-const EN = {
+const EN: Labels = {
   answerKey: "Answer Key",
   question: "Question",
-  correctAnswer: "Correct answer",
   why: "Explanation",
   whyNot: "Why the other options are wrong",
   subtitle: "Shuffled version",
 };
 
-function renderQuestion(q, t) {
+function renderQuestion(q: ShuffledQuestion): string {
   return `
     <section class="question">
-      <div class="question-title">
-        <span class="question-number">${q.number}</span>
-        <span class="question-text">${sanitizeFragment(q.question)}</span>
-      </div>
+      <img class="stem" src="${q.stemImageDataUri}" style="width:${q.stemWidthPx}px" alt="">
       <ul class="options">
         ${q.options
           .map(
             (o) => `
         <li>
           <span class="option-letter">${o.letter}</span>
-          <span class="option-text">${sanitizeFragment(o.text)}</span>
+          <img class="option-img" src="${o.imageDataUri}" style="width:${o.widthPx}px" alt="">
         </li>`
           )
           .join("")}
@@ -70,15 +63,17 @@ function renderQuestion(q, t) {
     </section>`;
 }
 
-function renderKeyEntry(q, t) {
-  const correct = q.options[q.correctIndex];
+function renderKeyEntry(q: ShuffledQuestion, t: Labels): string {
+  const correct = q.options.find((o) => o.isCorrect)!;
   const wrong = q.options.filter((o) => !o.isCorrect);
   return `
     <div class="key-entry">
       <div class="key-answer">
-        ${t.question} ${q.number}:
-        <span class="correct-letter">${q.correctLetter}</span>
-        — <span class="key-answer-text">${sanitizeFragment(correct.text)}</span>
+        <span class="key-answer-label">${t.question} ${q.number}:
+          <span class="correct-letter">${q.correctLetter}</span></span>
+        <span class="key-option">
+          <img class="key-option-img" src="${correct.imageDataUri}" style="width:${correct.widthPx}px" alt="">
+        </span>
       </div>
       <div class="key-explanation">
         <strong>${t.why}:</strong> ${sanitizeFragment(correct.note)}
@@ -87,29 +82,20 @@ function renderKeyEntry(q, t) {
         <strong>${t.whyNot}:</strong>
         <ul>
           ${wrong
-            .map(
-              (o) => `
-          <li><span class="ref-letter">${o.letter}</span> — ${sanitizeFragment(o.note)}</li>`
-            )
+            .map((o) => `<li><span class="ref-letter">${o.letter}</span> — ${sanitizeFragment(o.note)}</li>`)
             .join("")}
         </ul>
       </div>
     </div>`;
 }
 
-/**
- * Build the full printable HTML document for the shuffled exam:
- * RTL layout (for Hebrew), 2 questions per page, answer key on a new page.
- * @param {ReturnType<import("./shuffle.js").shuffleExam>} exam
- * @returns {Promise<string>} full HTML document
- */
-export async function buildHtml(exam) {
+export async function buildHtml(exam: ShuffledExam): Promise<string> {
   const rtl = exam.language === "he";
   const t = rtl ? HE : EN;
   const css = await readFile(CSS_PATH, "utf8");
 
   const pages = chunk(exam.questions, 2)
-    .map((pair) => `<div class="question-pair">${pair.map((q) => renderQuestion(q, t)).join("")}</div>`)
+    .map((pair) => `<div class="question-pair">${pair.map(renderQuestion).join("")}</div>`)
     .join("");
 
   const key = `

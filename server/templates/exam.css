@@ -1,6 +1,6 @@
 @page {
   size: A4;
-  margin: 18mm 16mm;
+  margin: 16mm 14mm;
 }
 
 * {
@@ -21,7 +21,11 @@ body {
   color: #1a1a1a;
 }
 
-/* ---------- exam header ---------- */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
 .exam-header {
   text-align: center;
   border-bottom: 2px solid #1a1a1a;
@@ -40,7 +44,6 @@ body {
   margin-top: 4px;
 }
 
-/* ---------- questions: exactly 2 per page ---------- */
 .question-pair {
   page-break-after: always;
   break-after: page;
@@ -54,35 +57,24 @@ body {
 .question {
   page-break-inside: avoid;
   break-inside: avoid;
-  margin-bottom: 26px;
+  margin-bottom: 24px;
 }
 
-.question-title {
-  font-weight: 700;
-  font-size: 12.5pt;
-  margin-bottom: 10px;
-}
-
-.question-number {
-  display: inline-block;
-  background: #1a1a1a;
-  color: #fff;
-  border-radius: 4px;
-  padding: 1px 9px;
-  margin-inline-end: 8px;
-  font-size: 11pt;
+.stem {
+  display: block;
+  margin-bottom: 8px;
 }
 
 .options {
   list-style: none;
-  margin-inline-start: 6px;
+  margin-inline-start: 4px;
 }
 
 .options li {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 4px 0;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 5px 0;
 }
 
 .option-letter {
@@ -95,53 +87,20 @@ body {
   line-height: 20px;
   font-size: 10.5pt;
   font-weight: 700;
+  margin-top: 1px;
 }
 
-/* ---------- verbatim content: tables & math ---------- */
-.question-text,
-.option-text,
-.key-answer-text {
-  /* fragments may contain block content (tables); keep flex/inline parents sane */
-  display: inline-block;
-  max-width: 100%;
-  vertical-align: top;
+.option-img {
+  display: block;
+  flex: 0 1 auto;
 }
 
-.question table,
-.answer-key table {
-  border-collapse: collapse;
-  margin: 8px 0;
-  font-size: 10.5pt;
-  page-break-inside: avoid;
-  break-inside: avoid;
+.key-option {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 10px;
 }
 
-.question td,
-.question th,
-.answer-key td,
-.answer-key th {
-  border: 1px solid #555;
-  padding: 4px 10px;
-  text-align: center;
-}
-
-.question th,
-.answer-key th {
-  background: #efefef;
-  font-weight: 700;
-}
-
-math {
-  font-size: 1.05em;
-  direction: ltr; /* formulas always read LTR, even inside RTL text */
-}
-
-sup,
-sub {
-  line-height: 0; /* keep exponents from stretching line height */
-}
-
-/* ---------- answer key: always starts on a fresh page ---------- */
 .answer-key {
   page-break-before: always;
   break-before: page;
@@ -166,6 +125,10 @@ sub {
 }
 
 .key-answer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
   font-weight: 700;
   font-size: 12.5pt;
   margin-bottom: 6px;
@@ -173,6 +136,11 @@ sub {
 
 .key-answer .correct-letter {
   color: #0a6e0a;
+}
+
+.key-option-img {
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .key-explanation {
@@ -198,4 +166,9 @@ sub {
 .key-refutations .ref-letter {
   font-weight: 700;
   color: #8a1f1f;
+}
+
+sup,
+sub {
+  line-height: 0;
 }
