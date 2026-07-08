@@ -75,7 +75,7 @@ export function App() {
       <main className="card">
         <h1 className="title">ExamShuffle</h1>
         <p className="subtitle">
-          מעלים מבחן אמריקאי, מקבלים גרסה עם תשובות מעורבלות, מפתח תשובות והסברים — מוכן ל-iPad
+          מעלים מבחן אמריקאי (טופס 0), מקבלים גרסה עם תשובות מעורבלות, מפתח תשובות והסברים — מוכן ל-iPad
         </p>
 
         {phase === "idle" && <FileDrop disabled={false} onFile={onFile} />}
