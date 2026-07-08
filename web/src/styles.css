@@ -1,0 +1,196 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #f2f4f8;
+  --card: #ffffff;
+  --ink: #1c2333;
+  --muted: #66708a;
+  --accent: #2f6fed;
+  --accent-dark: #1f56c4;
+  --success: #17864b;
+  --danger: #c0392b;
+  --border: #dde3ef;
+}
+
+body {
+  font-family: "Segoe UI", "Arial Hebrew", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  direction: rtl;
+}
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px;
+}
+
+.card {
+  width: 100%;
+  max-width: 520px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 36px 32px;
+  box-shadow: 0 10px 30px rgba(28, 35, 51, 0.08);
+  text-align: center;
+}
+
+.title {
+  font-size: 2rem;
+  letter-spacing: 0.5px;
+  direction: ltr;
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: 0.95rem;
+  margin: 10px 0 28px;
+  line-height: 1.6;
+}
+
+.file-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 40px 20px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.file-drop:hover,
+.file-drop.drag-over {
+  border-color: var(--accent);
+  background: #f5f8ff;
+}
+
+.file-drop.disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.file-drop-icon {
+  font-size: 2.2rem;
+}
+
+.file-drop-text {
+  font-weight: 600;
+}
+
+.file-drop-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.status-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
+.file-name {
+  font-size: 0.9rem;
+  color: var(--muted);
+  direction: ltr;
+}
+
+.progress {
+  width: 100%;
+}
+
+.progress-track {
+  height: 10px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-dark));
+  border-radius: 999px;
+  transition: width 0.6s ease;
+}
+
+.progress-stage {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.progress-percent {
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+}
+
+.done-check {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #e8f6ee;
+  color: var(--success);
+  font-size: 1.8rem;
+  line-height: 56px;
+}
+
+.done-text {
+  font-weight: 600;
+}
+
+.error-text {
+  color: var(--danger);
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.button {
+  border: none;
+  border-radius: 10px;
+  padding: 12px 28px;
+  font-size: 1rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.button.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.button.primary:hover {
+  background: var(--accent-dark);
+}
+
+.button.ghost {
+  background: transparent;
+  color: var(--muted);
+}
+
+.button.ghost:hover {
+  color: var(--ink);
+}
+
+.credits {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.credits strong {
+  color: var(--ink);
+}
