@@ -1,130 +1,125 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { downloadUrl, fetchJob, uploadExam, type JobState } from "./api";
+import { useEffect, useRef, useState } from "react";
+import { downloadUrl, fetchJob, uploadExams, type ShuffleSettings } from "./api";
 import { FileDrop } from "./components/FileDrop";
-import { ProgressBar } from "./components/ProgressBar";
-
-type Phase = "idle" | "working" | "done" | "error";
+import { JobRow, type TrackedJob } from "./components/JobRow";
+import { SettingsPanel } from "./components/SettingsPanel";
 
 const POLL_MS = 800;
 
-export function App() {
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [job, setJob] = useState<JobState | null>(null);
-  const [error, setError] = useState<string>("");
-  const [fileName, setFileName] = useState<string>("");
-  const autoDownloaded = useRef(false);
+const DEFAULT_SETTINGS: ShuffleSettings = {
+  model: "",
+  apiKey: "",
+  contextUrl: "",
+  contextFile: null,
+  openMode: "",
+};
 
-  const startDownload = useCallback((id: string) => {
+export function App() {
+  const [settings, setSettings] = useState<ShuffleSettings>(DEFAULT_SETTINGS);
+  const [jobs, setJobs] = useState<TrackedJob[]>([]);
+  const [uploadError, setUploadError] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const downloaded = useRef(new Set<string>());
+
+  const busy = uploading || jobs.some((j) => j.state.status === "processing");
+  const allSettled = jobs.length > 0 && !busy;
+
+  const startDownload = (jobId: string) => {
     const link = document.createElement("a");
-    link.href = downloadUrl(id);
+    link.href = downloadUrl(jobId);
     link.download = "";
     document.body.appendChild(link);
     link.click();
     link.remove();
-  }, []);
+  };
 
   useEffect(() => {
-    if (phase !== "working" || !jobId) return;
+    if (!jobs.some((j) => j.state.status === "processing")) return;
     const timer = setInterval(async () => {
-      try {
-        const state = await fetchJob(jobId);
-        setJob(state);
-        if (state.status === "done") {
-          setPhase("done");
-          if (!autoDownloaded.current) {
-            autoDownloaded.current = true;
-            startDownload(jobId);
+      const updates = await Promise.all(
+        jobs.map(async (job) => {
+          if (job.state.status !== "processing") return job;
+          try {
+            const state = await fetchJob(job.jobId);
+            if (state.status === "done" && !downloaded.current.has(job.jobId)) {
+              downloaded.current.add(job.jobId);
+              startDownload(job.jobId);
+            }
+            return { ...job, state };
+          } catch {
+            return {
+              ...job,
+              state: { ...job.state, status: "error" as const, error: "המשימה אבדה בשרת" },
+            };
           }
-        } else if (state.status === "error") {
-          setError(state.error ?? "אירעה שגיאה בעיבוד המבחן");
-          setPhase("error");
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "אירעה שגיאה");
-        setPhase("error");
-      }
+        })
+      );
+      setJobs(updates);
     }, POLL_MS);
     return () => clearInterval(timer);
-  }, [phase, jobId, startDownload]);
+  }, [jobs]);
 
-  const onFile = async (file: File) => {
-    setFileName(file.name);
-    setError("");
-    setJob({ status: "processing", stage: "מעלה את הקובץ...", percent: 5 });
-    setPhase("working");
-    autoDownloaded.current = false;
+  const onFiles = async (files: File[]) => {
+    setUploadError("");
+    setUploading(true);
     try {
-      setJobId(await uploadExam(file));
+      const refs = await uploadExams(files, settings);
+      setJobs(
+        refs.map((ref) => ({
+          ...ref,
+          state: { status: "processing" as const, stage: "ממתין בתור...", percent: 3, warnings: [] },
+        }))
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "ההעלאה נכשלה");
-      setPhase("error");
+      setUploadError(err instanceof Error ? err.message : "ההעלאה נכשלה");
+    } finally {
+      setUploading(false);
     }
   };
 
   const reset = () => {
-    setPhase("idle");
-    setJobId(null);
-    setJob(null);
-    setError("");
-    setFileName("");
+    setJobs([]);
+    setUploadError("");
+    downloaded.current.clear();
   };
 
   return (
     <div className="page">
       <main className="card">
-        <h1 className="title">ExamShuffle</h1>
+        <header className="app-header">
+          <img className="logo" src="/ExamShuffle.png" alt="ExamShuffle" />
+          <h1 className="title">ExamShuffle</h1>
+        </header>
         <p className="subtitle">
-          מעלים מבחן אמריקאי (טופס 0), מקבלים גרסה עם תשובות מעורבלות, מפתח
-          תשובות והסברים — מוכן ל-iPad
+          מעלים מבחן אמריקאי (טופס 0), מקבלים גרסה עם תשובות מעורבלות, מפתח תשובות והסברים — מוכן
+          ל-iPad
         </p>
 
-        {phase === "idle" && <FileDrop disabled={false} onFile={onFile} />}
-
-        {phase === "working" && job && (
-          <div className="status-block">
-            <div className="file-name">{fileName}</div>
-            <ProgressBar percent={job.percent} stage={job.stage} />
-          </div>
+        {jobs.length === 0 && (
+          <>
+            <SettingsPanel settings={settings} onChange={setSettings} disabled={busy} />
+            <FileDrop disabled={busy} onFiles={onFiles} />
+            {uploading && <div className="job-stage center">מעלה קבצים...</div>}
+            {uploadError && <div className="error-text">{uploadError}</div>}
+          </>
         )}
 
-        {phase === "done" && jobId && (
-          <div className="status-block">
-            <div className="done-check">✓</div>
-            <div className="done-text">
-              המבחן המעורבל מוכן! ההורדה החלה אוטומטית.
-            </div>
-            <button
-              className="button primary"
-              onClick={() => startDownload(jobId)}
-            >
-              הורדת המבחן המעורבל
-            </button>
-            <button className="button ghost" onClick={reset}>
-              עיבוד מבחן נוסף
-            </button>
-          </div>
-        )}
-
-        {phase === "error" && (
-          <div className="status-block">
-            <div className="error-text">{error}</div>
-            <button className="button primary" onClick={reset}>
-              ניסיון נוסף
-            </button>
+        {jobs.length > 0 && (
+          <div className="jobs">
+            {jobs.map((job) => (
+              <JobRow key={job.jobId} job={job} />
+            ))}
+            {allSettled && (
+              <button className="button ghost" onClick={reset}>
+                עיבוד מבחנים נוספים
+              </button>
+            )}
           </div>
         )}
       </main>
 
       <footer className="credits">
-        נוצר על ידי{" "}
-        <strong
-          style={{ cursor: "pointer" }}
-          onClick={() => window.open("https://github.com/nitzan8897", "_blank")}
-        >
-          ניצן אברג'יל
-        </strong>{" "}
-        · פותח יחד עם <strong>קלוד קוד המלך 👑</strong>
+        נוצר על ידי <strong>ניצן אברג'יל</strong> · פותח יחד עם <strong>קלוד קוד המלך 👑</strong>
       </footer>
     </div>
   );

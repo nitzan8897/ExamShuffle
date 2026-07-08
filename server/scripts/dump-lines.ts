@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { LoadedPdf } from "../src/pdf.js";
+import { LoadedPdf } from "../src/pdf/pdf.js";
 
 const [input] = process.argv.slice(2);
 if (!input) {

@@ -8,10 +8,11 @@ const base = "http://localhost:3000";
 
 const buffer = await readFile(file);
 const form = new FormData();
-form.append("exam", new Blob([buffer], { type: "application/pdf" }), path.basename(file));
+form.append("exams", new Blob([buffer], { type: "application/pdf" }), path.basename(file));
 
 const uploadRes = await fetch(`${base}/api/shuffle`, { method: "POST", body: form });
-const { jobId } = (await uploadRes.json()) as { jobId: string };
+const { jobs } = (await uploadRes.json()) as { jobs: { jobId: string }[] };
+const jobId = jobs[0]!.jobId;
 console.log("job:", jobId);
 
 let status = "processing";

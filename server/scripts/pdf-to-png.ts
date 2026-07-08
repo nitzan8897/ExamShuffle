@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import "../src/pdfjs-polyfill.js";
+import "../src/pdf/polyfill.js";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { createCanvas } from "@napi-rs/canvas";
 

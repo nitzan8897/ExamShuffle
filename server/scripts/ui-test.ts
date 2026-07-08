@@ -8,20 +8,27 @@ const outDir = path.resolve(here, "../output");
 
 const browser = await puppeteer.launch({ headless: "shell" });
 const page = await browser.newPage();
-await page.setViewport({ width: 900, height: 800 });
+await page.setViewport({ width: 900, height: 900 });
 
 await page.goto("http://localhost:3000", { waitUntil: "networkidle0" });
 await page.screenshot({ path: path.join(outDir, "ui-idle.png") });
 
-const input = await page.$("input[type=file]");
-if (!input) throw new Error("file input not found");
-await input.uploadFile(samplePdf);
+await page.click(".settings summary");
+await page.screenshot({ path: path.join(outDir, "ui-settings.png") });
+await page.click(".settings summary");
 
-await page.waitForSelector(".progress", { timeout: 10_000 });
+const input = await page.$("input[type=file][multiple]");
+if (!input) throw new Error("file input not found");
+await input.uploadFile(samplePdf, samplePdf);
+
+await page.waitForSelector(".job-row", { timeout: 15_000 });
 await page.screenshot({ path: path.join(outDir, "ui-progress.png") });
 
-await page.waitForSelector(".done-check", { timeout: 240_000 });
+await page.waitForFunction(
+  () => document.querySelectorAll(".job-row a[download]").length === 2,
+  { timeout: 480_000 }
+);
 await page.screenshot({ path: path.join(outDir, "ui-done.png") });
 
 await browser.close();
-console.log("UI test passed: idle -> progress -> done screenshots in server/output/");
+console.log("UI test passed: two parallel jobs completed, screenshots in server/output/");

@@ -2,23 +2,26 @@ import { useRef, useState, type DragEvent } from "react";
 
 interface Props {
   disabled: boolean;
-  onFile: (file: File) => void;
+  onFiles: (files: File[]) => void;
 }
 
-export function FileDrop({ disabled, onFile }: Props) {
+const isPdf = (file: File): boolean =>
+  file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
+export function FileDrop({ disabled, onFiles }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const pick = (file: File | undefined) => {
-    if (!file || disabled) return;
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) return;
-    onFile(file);
+  const pick = (list: FileList | null) => {
+    if (!list || disabled) return;
+    const files = Array.from(list).filter(isPdf);
+    if (files.length > 0) onFiles(files);
   };
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    pick(e.dataTransfer.files[0]);
+    pick(e.dataTransfer.files);
   };
 
   return (
@@ -36,15 +39,16 @@ export function FileDrop({ disabled, onFile }: Props) {
       onKeyDown={(e) => e.key === "Enter" && !disabled && inputRef.current?.click()}
     >
       <span className="file-drop-icon">📄</span>
-      <span className="file-drop-text">גררו לכאן קובץ PDF של המבחן</span>
-      <span className="file-drop-hint">או לחצו לבחירת קובץ</span>
+      <span className="file-drop-text">גררו לכאן קובץ PDF אחד או יותר</span>
+      <span className="file-drop-hint">או לחצו לבחירת קבצים — כל מבחן יעובד בנפרד</span>
       <input
         ref={inputRef}
         type="file"
         accept="application/pdf,.pdf"
+        multiple
         hidden
         onChange={(e) => {
-          pick(e.target.files?.[0]);
+          pick(e.target.files);
           e.target.value = "";
         }}
       />
