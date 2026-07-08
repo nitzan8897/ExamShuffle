@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/api/server.ts",
+    "start": "tsx src/api/server.ts",
     "cli": "tsx src/cli.ts",
     "sample": "tsx scripts/make-sample.ts",
     "typecheck": "tsc --noEmit"

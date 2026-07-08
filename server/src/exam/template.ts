@@ -1,9 +1,9 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ShuffledExam, ShuffledQuestion } from "./types.js";
+import type { OptionContent, ShuffledExam, ShuffledQuestion } from "../shared/types.js";
 
-const CSS_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "templates", "exam.css");
+const CSS_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "templates", "exam.css");
 
 const escapeHtml = (s: string): string =>
   s
@@ -26,7 +26,7 @@ interface Labels {
   question: string;
   why: string;
   whyNot: string;
-  subtitle: string;
+  answer: string;
 }
 
 const HE: Labels = {
@@ -34,7 +34,7 @@ const HE: Labels = {
   question: "שאלה",
   why: "הסבר",
   whyNot: "מדוע שאר האפשרויות שגויות",
-  subtitle: "גרסה מעורבלת",
+  answer: "תשובה",
 };
 
 const EN: Labels = {
@@ -42,28 +42,49 @@ const EN: Labels = {
   question: "Question",
   why: "Explanation",
   whyNot: "Why the other options are wrong",
-  subtitle: "Shuffled version",
+  answer: "Answer",
 };
 
+const renderContent = (content: OptionContent, className: string): string =>
+  content.type === "image"
+    ? `<img class="${className}" src="${content.dataUri}" style="width:${content.widthPx}px" alt="">`
+    : `<span class="option-text">${sanitizeFragment(content.html)}</span>`;
+
 function renderQuestion(q: ShuffledQuestion): string {
-  return `
-    <section class="question">
-      <img class="stem" src="${q.stemImageDataUri}" style="width:${q.stemWidthPx}px" alt="">
+  const options =
+    q.options.length === 0
+      ? ""
+      : `
       <ul class="options">
         ${q.options
           .map(
             (o) => `
         <li>
           <span class="option-letter">${o.letter}</span>
-          <img class="option-img" src="${o.imageDataUri}" style="width:${o.widthPx}px" alt="">
+          ${renderContent(o.content, "option-img")}
         </li>`
           )
           .join("")}
-      </ul>
+      </ul>`;
+
+  return `
+    <section class="question">
+      <img class="stem" src="${q.stemImageDataUri}" style="width:${q.stemWidthPx}px" alt="">
+      ${options}
     </section>`;
 }
 
 function renderKeyEntry(q: ShuffledQuestion, t: Labels): string {
+  if (q.kind === "open" && q.options.length === 0) {
+    return `
+    <div class="key-entry">
+      <div class="key-answer">${t.question} ${q.number}</div>
+      <div class="key-explanation">
+        <strong>${t.answer}:</strong> ${sanitizeFragment(q.answerText ?? "")}
+      </div>
+    </div>`;
+  }
+
   const correct = q.options.find((o) => o.isCorrect)!;
   const wrong = q.options.filter((o) => !o.isCorrect);
   return `
@@ -71,9 +92,7 @@ function renderKeyEntry(q: ShuffledQuestion, t: Labels): string {
       <div class="key-answer">
         <span class="key-answer-label">${t.question} ${q.number}:
           <span class="correct-letter">${q.correctLetter}</span></span>
-        <span class="key-option">
-          <img class="key-option-img" src="${correct.imageDataUri}" style="width:${correct.widthPx}px" alt="">
-        </span>
+        <span class="key-option">${renderContent(correct.content, "key-option-img")}</span>
       </div>
       <div class="key-explanation">
         <strong>${t.why}:</strong> ${sanitizeFragment(correct.note)}
@@ -94,6 +113,12 @@ export async function buildHtml(exam: ShuffledExam): Promise<string> {
   const t = rtl ? HE : EN;
   const css = await readFile(CSS_PATH, "utf8");
 
+  const titleLine =
+    [exam.institution, exam.courseName].filter((s) => s?.trim()).join(" - ") || exam.examTitle;
+  const subtitle = exam.examTerm?.trim()
+    ? `<div class="subtitle">${escapeHtml(exam.examTerm)}</div>`
+    : "";
+
   const pages = chunk(exam.questions, 2)
     .map((pair) => `<div class="question-pair">${pair.map(renderQuestion).join("")}</div>`)
     .join("");
@@ -108,13 +133,13 @@ export async function buildHtml(exam: ShuffledExam): Promise<string> {
 <html lang="${escapeHtml(exam.language || "he")}" dir="${rtl ? "rtl" : "ltr"}">
 <head>
 <meta charset="utf-8">
-<title>${escapeHtml(exam.examTitle)}</title>
+<title>${escapeHtml(titleLine)}</title>
 <style>${css}</style>
 </head>
 <body>
   <header class="exam-header">
-    <h1>${escapeHtml(exam.examTitle)}</h1>
-    <div class="subtitle">${t.subtitle}</div>
+    <h1>${escapeHtml(titleLine)}</h1>
+    ${subtitle}
   </header>
   ${pages}
   ${key}

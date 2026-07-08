@@ -1,12 +1,31 @@
+export type OpenMode = "convert" | "keep" | "remove";
+
+export interface PipelineOptions {
+  apiKey?: string;
+  model?: string;
+  contextText?: string;
+  contextPdf?: Buffer;
+  openMode?: OpenMode;
+}
+
+export type QuestionKind = "mcq" | "open";
+
 export interface AnalyzedQuestion {
   number: number;
   page: number;
-  correctExplanation: string;
-  wrongRefutations: string[];
+  kind: QuestionKind;
+  correctExplanation?: string;
+  wrongRefutations?: string[];
+  convertedCorrect?: string;
+  convertedWrong?: string[];
+  answerText?: string;
 }
 
 export interface AnalyzedExam {
   examTitle: string;
+  institution: string;
+  courseName: string;
+  examTerm: string;
   language: string;
   questions: AnalyzedQuestion[];
 }
@@ -29,28 +48,37 @@ export interface OptionLayout {
 export interface QuestionLayout {
   number: number;
   page: number;
+  kind: QuestionKind;
   stem: Rect;
   options: OptionLayout[];
 }
 
+export type OptionContent =
+  | { type: "image"; dataUri: string; widthPx: number }
+  | { type: "text"; html: string };
+
 export interface ShuffledOption {
   letter: string;
-  imageDataUri: string;
-  widthPx: number;
+  content: OptionContent;
   isCorrect: boolean;
   note: string;
 }
 
 export interface ShuffledQuestion {
   number: number;
+  kind: QuestionKind;
   stemImageDataUri: string;
   stemWidthPx: number;
   options: ShuffledOption[];
-  correctLetter: string;
+  correctLetter?: string;
+  answerText?: string;
 }
 
 export interface ShuffledExam {
   examTitle: string;
+  institution: string;
+  courseName: string;
+  examTerm: string;
   language: string;
   questions: ShuffledQuestion[];
 }

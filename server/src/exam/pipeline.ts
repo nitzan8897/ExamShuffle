@@ -1,24 +1,49 @@
 import { readFile } from "node:fs/promises";
-import { analyzeExam } from "./analyze.js";
+import { analyzeExam } from "../ai/analyze.js";
+import { LoadedPdf, type RenderedPage } from "../pdf/pdf.js";
+import { renderPdf } from "../pdf/render.js";
 import { cropOptionRow, cropRegion } from "./crop.js";
 import { locateQuestions } from "./layout.js";
-import { LoadedPdf, type RenderedPage } from "./pdf.js";
-import { renderPdf } from "./render.js";
 import { fisherYates, lettersFor } from "./shuffle.js";
 import { buildHtml } from "./template.js";
-import type { ProgressFn, ShuffledExam, ShuffledQuestion } from "./types.js";
+import type {
+  AnalyzedQuestion,
+  PipelineOptions,
+  ProgressFn,
+  ShuffledExam,
+  ShuffledOption,
+  ShuffledQuestion,
+} from "../shared/types.js";
 
 const noProgress: ProgressFn = () => {};
+
+interface OptionSource {
+  content: ShuffledOption["content"];
+  isCorrect: boolean;
+  note: string;
+}
+
+function textOptionSources(question: AnalyzedQuestion): OptionSource[] {
+  return [
+    { content: { type: "text", html: question.convertedCorrect! }, isCorrect: true, note: question.correctExplanation! },
+    ...question.convertedWrong!.map((text, i) => ({
+      content: { type: "text", html: text } as const,
+      isCorrect: false,
+      note: question.wrongRefutations![i]!,
+    })),
+  ];
+}
 
 export async function runPipeline(
   inputPdfPath: string,
   outputPdfPath: string,
+  options: PipelineOptions = {},
   onProgress: ProgressFn = noProgress
 ): Promise<ShuffledExam> {
   const pdfBuffer = await readFile(inputPdfPath);
 
   onProgress("מנתח את המבחן בעזרת AI...", 10);
-  const analyzed = await analyzeExam(pdfBuffer);
+  const analyzed = await analyzeExam(pdfBuffer, options);
 
   const pdf = await LoadedPdf.open(pdfBuffer);
   try {
@@ -43,35 +68,49 @@ export async function runPipeline(
     for (const [i, layout] of layouts.entries()) {
       const question = analyzed.questions[i]!;
       const page = await renderedPage(layout.page);
-
       const stem = cropRegion(page, layout.stem);
-      const notes = [question.correctExplanation, ...question.wrongRefutations];
-      const shuffled = fisherYates(
-        layout.options.map((option, k) => ({
-          crop: cropOptionRow(page, option, rtl),
-          isCorrect: k === 0,
-          note: notes[k]!,
-        }))
-      );
 
+      if (question.kind === "open" && options.openMode === "keep") {
+        questions.push({
+          number: layout.number,
+          kind: "open",
+          stemImageDataUri: stem.dataUri,
+          stemWidthPx: stem.widthPx,
+          options: [],
+          answerText: question.answerText,
+        });
+        continue;
+      }
+
+      const sources: OptionSource[] =
+        question.kind === "open"
+          ? textOptionSources(question)
+          : layout.options.map((option, k) => ({
+              content: (() => {
+                const crop = cropOptionRow(page, option, rtl);
+                return { type: "image", dataUri: crop.dataUri, widthPx: crop.widthPx } as const;
+              })(),
+              isCorrect: k === 0,
+              note: [question.correctExplanation!, ...question.wrongRefutations!][k]!,
+            }));
+
+      const shuffled = fisherYates(sources);
       const correctIndex = shuffled.findIndex((o) => o.isCorrect);
       questions.push({
         number: layout.number,
+        kind: question.kind,
         stemImageDataUri: stem.dataUri,
         stemWidthPx: stem.widthPx,
-        options: shuffled.map((o, k) => ({
-          letter: letters[k]!,
-          imageDataUri: o.crop.dataUri,
-          widthPx: o.crop.widthPx,
-          isCorrect: o.isCorrect,
-          note: o.note,
-        })),
+        options: shuffled.map((o, k) => ({ letter: letters[k]!, ...o })),
         correctLetter: letters[correctIndex]!,
       });
     }
 
     const exam: ShuffledExam = {
       examTitle: analyzed.examTitle,
+      institution: analyzed.institution,
+      courseName: analyzed.courseName,
+      examTerm: analyzed.examTerm,
       language: analyzed.language,
       questions,
     };

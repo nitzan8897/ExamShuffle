@@ -1,4 +1,4 @@
-import "./pdfjs-polyfill.js";
+import "./polyfill.js";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { createCanvas, type Canvas } from "@napi-rs/canvas";

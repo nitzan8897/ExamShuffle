@@ -1,18 +1,32 @@
 import { access, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { runPipeline } from "./pipeline.js";
+import { runPipeline } from "./exam/pipeline.js";
+import type { OpenMode } from "./shared/types.js";
 
-function parseArgs(argv: string[]): { input?: string; output?: string } {
+interface CliArgs {
+  input?: string;
+  output?: string;
+  openMode?: OpenMode;
+}
+
+function parseArgs(argv: string[]): CliArgs {
   const args = argv.slice(2);
   const input = args.find((a) => !a.startsWith("-"));
-  const oIdx = args.indexOf("-o");
-  return { input, output: oIdx !== -1 ? args[oIdx + 1] : undefined };
+  const valueOf = (flag: string): string | undefined => {
+    const i = args.indexOf(flag);
+    return i !== -1 ? args[i + 1] : undefined;
+  };
+  const openModeRaw = valueOf("--open-mode");
+  const openMode = ["convert", "keep", "remove"].includes(openModeRaw ?? "")
+    ? (openModeRaw as OpenMode)
+    : undefined;
+  return { input, output: valueOf("-o"), openMode };
 }
 
 async function main(): Promise<void> {
-  const { input, output } = parseArgs(process.argv);
+  const { input, output, openMode } = parseArgs(process.argv);
   if (!input) {
-    console.error("Usage: npm run cli -- <exam.pdf> [-o output.pdf]");
+    console.error("Usage: npm run cli -- <exam.pdf> [-o output.pdf] [--open-mode convert|keep|remove]");
     process.exit(1);
   }
   try {
@@ -27,7 +41,7 @@ async function main(): Promise<void> {
   await mkdir(outDir, { recursive: true });
   const outPdf = output ?? path.join(outDir, `${base}.shuffled.pdf`);
 
-  const exam = await runPipeline(input, outPdf, (stage, percent) =>
+  const exam = await runPipeline(input, outPdf, { openMode }, (stage, percent) =>
     console.log(`[${String(percent).padStart(3)}%] ${stage}`)
   );
 
@@ -40,7 +54,13 @@ async function main(): Promise<void> {
         questions: exam.questions.map((q) => ({
           ...q,
           stemImageDataUri: `<png ${q.stemImageDataUri.length}b>`,
-          options: q.options.map((o) => ({ ...o, imageDataUri: `<png ${o.imageDataUri.length}b>` })),
+          options: q.options.map((o) => ({
+            ...o,
+            content:
+              o.content.type === "image"
+                ? { ...o.content, dataUri: `<png ${o.content.dataUri.length}b>` }
+                : o.content,
+          })),
         })),
       },
       null,

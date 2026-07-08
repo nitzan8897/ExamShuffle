@@ -1,5 +1,5 @@
-import type { LoadedPdf, TextLine } from "./pdf.js";
-import type { AnalyzedQuestion, OptionLayout, QuestionLayout, Rect } from "./types.js";
+import type { LoadedPdf, TextLine } from "../pdf/pdf.js";
+import type { AnalyzedQuestion, OptionLayout, QuestionLayout, Rect } from "../shared/types.js";
 
 const LETTER_SETS = [
   ["א", "ב", "ג", "ד"],
@@ -70,19 +70,20 @@ interface ParsedQuestion {
   letters: string[];
 }
 
+function blockEnd(lines: TextLine[], anchorIndex: number, laterNumbers: Set<number>): number {
+  for (let i = anchorIndex + 1; i < lines.length; i++) {
+    const n = questionNumberOf(lines[i]!.text);
+    if (n !== null && laterNumbers.has(n)) return i;
+  }
+  return lines.length;
+}
+
 function parseQuestionBlock(
   lines: TextLine[],
   anchorIndex: number,
   laterNumbers: Set<number>
 ): ParsedQuestion | null {
-  let endIndex = lines.length;
-  for (let i = anchorIndex + 1; i < lines.length; i++) {
-    const n = questionNumberOf(lines[i]!.text);
-    if (n !== null && laterNumbers.has(n)) {
-      endIndex = i;
-      break;
-    }
-  }
+  const endIndex = blockEnd(lines, anchorIndex, laterNumbers);
 
   for (const letters of LETTER_SETS) {
     const rtl = letters[0] === "א";
@@ -147,7 +148,27 @@ function buildLayout(question: AnalyzedQuestion, page: number, lines: TextLine[]
     return { rect, labelWidth, labelExact: label.exact, firstLineHeight: line.bottom - line.top };
   });
 
-  return { number: question.number, page, stem, options };
+  return { number: question.number, page, kind: "mcq", stem, options };
+}
+
+function buildOpenLayout(
+  question: AnalyzedQuestion,
+  page: number,
+  lines: TextLine[],
+  anchorIndex: number,
+  laterNumbers: Set<number>
+): QuestionLayout {
+  const endIndex = blockEnd(lines, anchorIndex, laterNumbers);
+  const bounds = columnBounds(lines, anchorIndex, endIndex);
+  const anchor = lines[anchorIndex]!;
+  const lastLine = lines[endIndex - 1]!;
+  const stem: Rect = {
+    x: bounds.minX,
+    y: anchor.top - PAD,
+    w: bounds.maxX - bounds.minX,
+    h: lastLine.bottom + PAD - (anchor.top - PAD),
+  };
+  return { number: question.number, page, kind: "open", stem, options: [] };
 }
 
 export async function locateQuestions(pdf: LoadedPdf, questions: AnalyzedQuestion[]): Promise<QuestionLayout[]> {
@@ -177,6 +198,10 @@ export async function locateQuestions(pdf: LoadedPdf, questions: AnalyzedQuestio
       const lines = await linesOf(page);
       for (let i = 0; i < lines.length; i++) {
         if (questionNumberOf(lines[i]!.text) !== question.number) continue;
+        if (question.kind === "open") {
+          located = buildOpenLayout(question, page, lines, i, laterNumbers);
+          break;
+        }
         const parsed = parseQuestionBlock(lines, i, laterNumbers);
         if (parsed) {
           located = buildLayout(question, page, lines, parsed);

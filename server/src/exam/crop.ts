@@ -1,6 +1,6 @@
 import { createCanvas, type Canvas } from "@napi-rs/canvas";
-import { RENDER_SCALE, type RenderedPage } from "./pdf.js";
-import type { OptionLayout, Rect } from "./types.js";
+import { RENDER_SCALE, type RenderedPage } from "../pdf/pdf.js";
+import type { OptionLayout, Rect } from "../shared/types.js";
 
 // Rendered pixels -> CSS px so crops print at their original physical size
 // (PDF is 72dpi-based, CSS is 96dpi-based).

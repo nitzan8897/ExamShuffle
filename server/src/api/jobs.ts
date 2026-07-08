@@ -4,9 +4,11 @@ export type JobStatus = "processing" | "done" | "error";
 
 export interface Job {
   id: string;
+  fileName: string;
   status: JobStatus;
   stage: string;
   percent: number;
+  warnings: string[];
   error?: string;
   outputPath?: string;
   downloadName?: string;
@@ -16,12 +18,14 @@ export interface Job {
 const JOB_TTL_MS = 60 * 60 * 1000;
 const jobs = new Map<string, Job>();
 
-export function createJob(): Job {
+export function createJob(fileName: string): Job {
   const job: Job = {
     id: randomUUID(),
+    fileName,
     status: "processing",
-    stage: "מעלה את הקובץ...",
-    percent: 5,
+    stage: "ממתין בתור...",
+    percent: 3,
+    warnings: [],
     createdAt: Date.now(),
   };
   jobs.set(job.id, job);
