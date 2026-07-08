@@ -44,7 +44,22 @@ npm run build   # build the React app once
 npm start       # serves UI + API at http://localhost:3000
 ```
 
-Drag a PDF in, watch the progress bar, and the shuffled exam downloads automatically.
+Drag one or more exam PDFs in — each file gets its own progress bar and downloads
+automatically when ready.
+
+Advanced settings (optional, collapsible panel):
+
+- **Gemini model / API key** — override the server's `.env` per run.
+- **Reference material** — a public URL or an uploaded PDF/TXT/MD file (e.g. a summary
+  exported from NotebookLM) used to ground the explanations. NotebookLM links themselves
+  are login-walled and can't be fetched by the server — export the notebook's summary
+  and upload it as a file instead.
+- **Non-multiple-choice questions** — when the exam contains open questions, choose:
+  convert them to multiple-choice (AI-generated options), keep them as-is (with a model
+  answer in the key), or remove them from the output.
+
+The output header shows the institution and course name on the first line and the exam
+term (מועד) below it, both extracted from the exam itself.
 
 For development (Vite hot reload on :5173, API on :3000):
 
@@ -55,29 +70,33 @@ npm run dev
 ## CLI
 
 ```bash
-npm run cli -- path/to/exam.pdf                 # -> server/output/exam.shuffled.pdf
+npm run cli -- path/to/exam.pdf                              # -> output/exam.shuffled.pdf
 npm run cli -- path/to/exam.pdf -o my-exam.pdf
+npm run cli -- path/to/exam.pdf --open-mode convert          # convert|keep|remove
 ```
 
 ## Try it
 
 ```bash
 npm run sample                        # writes samples/sample-exam.pdf
-npm run cli -- ../samples/sample-exam.pdf
+npm run cli -- samples/sample-exam.pdf
 ```
 
 ## Project structure
 
 ```text
-server/src/analyze.ts    Gemini call: question list + explanations (JSON schema)
-server/src/pdf.ts        pdf.js wrapper: page rendering + text-layer lines
-server/src/layout.ts     deterministic question/option region detection
-server/src/crop.ts       pixel cropping, label erase, whitespace trim
-server/src/shuffle.ts    crypto Fisher-Yates + option letters
-server/src/template.ts   RTL HTML composition (2 questions/page, answer key)
-server/src/render.ts     Puppeteer HTML -> PDF
-server/src/pipeline.ts   orchestration with progress reporting
-server/src/server.ts     Express API: upload, job progress, download
-server/src/cli.ts        command-line entry
-web/src/                 React UI (Hebrew, RTL): drop zone, progress, auto-download
+server/src/ai/analyze.ts      Gemini call: metadata, question list, explanations
+server/src/pdf/pdf.ts         pdf.js wrapper: page rendering + text-layer lines
+server/src/pdf/polyfill.ts    Node 20 shims for pdfjs-dist
+server/src/pdf/render.ts      Puppeteer HTML -> PDF
+server/src/exam/layout.ts     deterministic question/option region detection
+server/src/exam/crop.ts       pixel cropping, label erase, whitespace trim
+server/src/exam/shuffle.ts    crypto Fisher-Yates + option letters
+server/src/exam/template.ts   RTL HTML composition (2 questions/page, answer key)
+server/src/exam/pipeline.ts   orchestration with progress reporting
+server/src/api/server.ts      Express API: batch upload, job queue, download
+server/src/api/jobs.ts        in-memory job store
+server/src/shared/            types + env loading
+server/src/cli.ts             command-line entry
+web/src/                      React UI: multi-upload, settings, per-file progress
 ```
