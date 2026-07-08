@@ -1,0 +1,12 @@
+# secrets
+.env
+
+# deps
+node_modules/
+
+# pipeline output
+output/
+
+# OS noise
+Thumbs.db
+.DS_Store
