@@ -75,7 +75,8 @@ export function App() {
       <main className="card">
         <h1 className="title">ExamShuffle</h1>
         <p className="subtitle">
-          מעלים מבחן אמריקאי (טופס 0), מקבלים גרסה עם תשובות מעורבלות, מפתח תשובות והסברים — מוכן ל-iPad
+          מעלים מבחן אמריקאי (טופס 0), מקבלים גרסה עם תשובות מעורבלות, מפתח
+          תשובות והסברים — מוכן ל-iPad
         </p>
 
         {phase === "idle" && <FileDrop disabled={false} onFile={onFile} />}
@@ -90,8 +91,13 @@ export function App() {
         {phase === "done" && jobId && (
           <div className="status-block">
             <div className="done-check">✓</div>
-            <div className="done-text">המבחן המעורבל מוכן! ההורדה החלה אוטומטית.</div>
-            <button className="button primary" onClick={() => startDownload(jobId)}>
+            <div className="done-text">
+              המבחן המעורבל מוכן! ההורדה החלה אוטומטית.
+            </div>
+            <button
+              className="button primary"
+              onClick={() => startDownload(jobId)}
+            >
               הורדת המבחן המעורבל
             </button>
             <button className="button ghost" onClick={reset}>
@@ -111,7 +117,14 @@ export function App() {
       </main>
 
       <footer className="credits">
-        נוצר על ידי <strong>ניצן אברג'יל</strong> · פותח יחד עם <strong>קלוד קוד המלך 👑</strong>
+        נוצר על ידי{" "}
+        <strong
+          style={{ cursor: "pointer" }}
+          onClick={() => window.open("https://github.com/nitzan8897", "_blank")}
+        >
+          ניצן אברג'יל
+        </strong>{" "}
+        · פותח יחד עם <strong>קלוד קוד המלך 👑</strong>
       </footer>
     </div>
   );
