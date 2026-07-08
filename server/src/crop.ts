@@ -120,8 +120,9 @@ export function cropOptionRow(page: RenderedPage, option: OptionLayout, rtl: boo
   const ctx = canvas.getContext("2d");
 
   const bandHeightPx = Math.ceil((option.firstLineHeight + 2) * RENDER_SCALE);
-  const measured = measureLabel(canvas, rtl, bandHeightPx);
-  const eraseWidth = measured ?? Math.ceil((option.labelWidth + 1) * RENDER_SCALE);
+  const eraseWidth = option.labelExact
+    ? Math.ceil((option.labelWidth + 1.5) * RENDER_SCALE)
+    : measureLabel(canvas, rtl, bandHeightPx) ?? Math.ceil((option.labelWidth + 1) * RENDER_SCALE);
 
   ctx.fillStyle = "#ffffff";
   if (rtl) {

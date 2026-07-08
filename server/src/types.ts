@@ -22,6 +22,7 @@ export interface Rect {
 export interface OptionLayout {
   rect: Rect;
   labelWidth: number;
+  labelExact: boolean;
   firstLineHeight: number;
 }
 

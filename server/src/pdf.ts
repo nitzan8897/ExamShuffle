@@ -100,7 +100,12 @@ export class LoadedPdf {
       line.spans.sort((a, b) => b.maxX - a.maxX);
       line.text = line.spans.map((s) => s.str).join(" ").trim();
     }
-    return lines.sort((a, b) => a.top - b.top);
+
+    const footerCut = viewport.height * 0.92;
+    const isFooter = (l: TextLine): boolean =>
+      l.top > footerCut && (/^(עמוד|page)\s+\d+/i.test(l.text) || /^\d+(\s*\/\s*\d+)?$/.test(l.text));
+
+    return lines.filter((l) => !isFooter(l)).sort((a, b) => a.top - b.top);
   }
 
   async close(): Promise<void> {

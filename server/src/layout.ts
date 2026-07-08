@@ -10,18 +10,26 @@ const LETTER_SETS = [
 const PAD = 3;
 const GAP = 2;
 
-function leadingNumber(text: string): number | null {
-  const m = text.trim().match(/^[.()\-:]{0,2}(\d{1,3})(?:\D|$)/);
-  return m ? Number(m[1]) : null;
+const QUESTION_WORD_PREFIX = /^(?:שאלה|question)\s*(?:מספר|number|no\.?)?\s*[.()\-:]{0,2}(\d{1,3})(?:\D|$)/i;
+
+function questionNumberOf(text: string): number | null {
+  const t = text.trim();
+  const wordMatch = t.match(QUESTION_WORD_PREFIX);
+  if (wordMatch) return Number(wordMatch[1]);
+  const bareMatch = t.match(/^[.()\-:]{0,2}(\d{1,3})(?:\D|$)/);
+  return bareMatch ? Number(bareMatch[1]) : null;
 }
 
 interface LabelMatch {
-  spanIndex: number;
   labelMinX: number;
   labelMaxX: number;
+  /** True when the label is made of standalone spans, so its bounds are exact. */
+  exact: boolean;
 }
 
-function matchLetterLabel(line: TextLine, letter: string): LabelMatch | null {
+const isPunctSpan = (str: string): boolean => /^[.)\-:]$/.test(str.trim());
+
+function matchLetterLabel(line: TextLine, letter: string, rtl: boolean): LabelMatch | null {
   for (let i = 0; i < line.spans.length; i++) {
     const span = line.spans[i]!;
     const str = span.str;
@@ -30,10 +38,26 @@ function matchLetterLabel(line: TextLine, letter: string): LabelMatch | null {
     const rest = stripped.slice(letter.length);
     if (rest !== "" && !/^[.)\-:\s]/.test(rest)) continue;
 
+    if (str.trim().length <= letter.length + 1) {
+      // Standalone label span; absorb adjacent punctuation spans ("א" + ".").
+      let labelMinX = span.minX;
+      let labelMaxX = span.maxX;
+      const step = rtl ? 1 : -1;
+      for (let j = i + step; j >= 0 && j < line.spans.length; j += step) {
+        const next = line.spans[j]!;
+        if (!isPunctSpan(next.str)) break;
+        labelMinX = Math.min(labelMinX, next.minX);
+        labelMaxX = Math.max(labelMaxX, next.maxX);
+      }
+      return { labelMinX, labelMaxX, exact: true };
+    }
+
     const punct = rest.match(/^[.)\-:]?\s*/);
     const labelChars = str.length - rest.length + (punct ? punct[0].length : 0);
     const labelWidth = (span.maxX - span.minX) * Math.min(1, labelChars / Math.max(1, str.length));
-    return { spanIndex: i, labelMinX: span.maxX - labelWidth, labelMaxX: span.maxX };
+    return rtl
+      ? { labelMinX: span.maxX - labelWidth, labelMaxX: span.maxX, exact: false }
+      : { labelMinX: span.minX, labelMaxX: span.minX + labelWidth, exact: false };
   }
   return null;
 }
@@ -53,7 +77,7 @@ function parseQuestionBlock(
 ): ParsedQuestion | null {
   let endIndex = lines.length;
   for (let i = anchorIndex + 1; i < lines.length; i++) {
-    const n = leadingNumber(lines[i]!.text);
+    const n = questionNumberOf(lines[i]!.text);
     if (n !== null && laterNumbers.has(n)) {
       endIndex = i;
       break;
@@ -61,13 +85,14 @@ function parseQuestionBlock(
   }
 
   for (const letters of LETTER_SETS) {
+    const rtl = letters[0] === "א";
     const optionIndices: number[] = [];
     const labels: LabelMatch[] = [];
     let from = anchorIndex + 1;
     for (const letter of letters) {
       let found = -1;
       for (let i = from; i < endIndex; i++) {
-        const label = matchLetterLabel(lines[i]!, letter);
+        const label = matchLetterLabel(lines[i]!, letter, rtl);
         if (label) {
           found = i;
           labels.push(label);
@@ -119,7 +144,7 @@ function buildLayout(question: AnalyzedQuestion, page: number, lines: TextLine[]
     const bottom = k < 3 ? lines[optionIndices[k + 1]!]!.top + 1 : lastLine.bottom + GAP;
     const rect: Rect = { x: bounds.minX, y: top, w: bounds.maxX - bounds.minX, h: bottom - top };
     const labelWidth = rtl ? bounds.maxX - label.labelMinX : label.labelMaxX - bounds.minX;
-    return { rect, labelWidth, firstLineHeight: line.bottom - line.top };
+    return { rect, labelWidth, labelExact: label.exact, firstLineHeight: line.bottom - line.top };
   });
 
   return { number: question.number, page, stem, options };
@@ -151,7 +176,7 @@ export async function locateQuestions(pdf: LoadedPdf, questions: AnalyzedQuestio
     for (const page of candidatePages) {
       const lines = await linesOf(page);
       for (let i = 0; i < lines.length; i++) {
-        if (leadingNumber(lines[i]!.text) !== question.number) continue;
+        if (questionNumberOf(lines[i]!.text) !== question.number) continue;
         const parsed = parseQuestionBlock(lines, i, laterNumbers);
         if (parsed) {
           located = buildLayout(question, page, lines, parsed);
