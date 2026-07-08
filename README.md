@@ -10,6 +10,10 @@ clean, shuffled, Notability-ready PDF with a full answer key.
    The model returns every question verbatim: the correct option (original A), the 3 wrong
    options, an explanation of why the correct answer is right, and a refutation for each
    wrong option.
+   Question and option content is never rewritten: it comes back as minimal HTML fragments
+   that preserve the original form — tables as real `<table>` markup, math with
+   `<sup>`/`<sub>`/MathML in logical reading order, Latin symbols kept in Latin script,
+   and inline formulas wrapped in `<span dir="ltr">` so they render correctly inside RTL text.
 2. **Shuffle** — the 4 options are shuffled **locally** with a crypto-random Fisher-Yates.
    Because the shuffle never happens inside the LLM, the answer-key letter is guaranteed
    to point at the true answer.
@@ -35,7 +39,7 @@ cp .env.example .env   # then put your Gemini API key in .env
 
 `.env`:
 
-```
+```ini
 GEMINI_API_KEY=your-api-key-here
 GEMINI_MODEL=gemini-2.5-flash   # optional
 ```
@@ -59,7 +63,7 @@ npm start -- samples/sample-exam.pdf
 
 ## Project structure
 
-```
+```text
 src/index.js      CLI orchestration (extract -> shuffle -> html -> pdf)
 src/extract.js    Gemini call, structured JSON schema, validation
 src/shuffle.js    local Fisher-Yates shuffle + answer-key mapping
