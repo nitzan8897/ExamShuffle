@@ -1,5 +1,5 @@
 import type { LoadedPdf, TextLine } from "../pdf/pdf.js";
-import type { AnalyzedQuestion, OptionLayout, QuestionLayout, Rect } from "../shared/types.js";
+import type { AnalyzedQuestion, OptionLayout, QuestionLayout, Segment } from "../shared/types.js";
 
 const LETTER_SETS = [
   ["א", "ב", "ג", "ד"],
@@ -9,6 +9,13 @@ const LETTER_SETS = [
 
 const PAD = 3;
 const GAP = 2;
+// A vertical jump larger than this (same page) ends the question's content:
+// trailers like "--- סוף המבחן ---" sit after a clearly larger gap.
+const CONTENT_GAP_LIMIT = 15;
+
+interface GlobalLine extends TextLine {
+  page: number;
+}
 
 const QUESTION_WORD_PREFIX = /^(?:שאלה|question)\s*(?:מספר|number|no\.?)?\s*[.()\-:]{0,2}(\d{1,3})(?:\D|$)/i;
 
@@ -62,15 +69,7 @@ function matchLetterLabel(line: TextLine, letter: string, rtl: boolean): LabelMa
   return null;
 }
 
-interface ParsedQuestion {
-  anchorIndex: number;
-  endIndex: number;
-  optionIndices: number[];
-  labels: LabelMatch[];
-  letters: string[];
-}
-
-function blockEnd(lines: TextLine[], anchorIndex: number, laterNumbers: Set<number>): number {
+function blockEnd(lines: GlobalLine[], anchorIndex: number, laterNumbers: Set<number>): number {
   for (let i = anchorIndex + 1; i < lines.length; i++) {
     const n = questionNumberOf(lines[i]!.text);
     if (n !== null && laterNumbers.has(n)) return i;
@@ -78,8 +77,73 @@ function blockEnd(lines: TextLine[], anchorIndex: number, laterNumbers: Set<numb
   return lines.length;
 }
 
+/** Walk from `from`, stopping at the first oversized same-page vertical gap. */
+function contentEnd(lines: GlobalLine[], from: number, to: number): number {
+  for (let i = from + 1; i < to; i++) {
+    const prev = lines[i - 1]!;
+    const line = lines[i]!;
+    if (line.page === prev.page && line.top - prev.bottom > CONTENT_GAP_LIMIT) return i;
+  }
+  return to;
+}
+
+interface PageBounds {
+  minX: number;
+  maxX: number;
+}
+
+function boundsByPage(lines: GlobalLine[], from: number, to: number): Map<number, PageBounds> {
+  const bounds = new Map<number, PageBounds>();
+  for (let i = from; i < to; i++) {
+    const line = lines[i]!;
+    const b = bounds.get(line.page) ?? { minX: Infinity, maxX: -Infinity };
+    b.minX = Math.min(b.minX, line.minX);
+    b.maxX = Math.max(b.maxX, line.maxX);
+    bounds.set(line.page, b);
+  }
+  return bounds;
+}
+
+/**
+ * Slice a line range into per-page rectangles. `firstTop` positions the top
+ * edge on the first page; `lastBottom` (when set) the bottom edge on the last.
+ */
+function segmentsForRange(
+  lines: GlobalLine[],
+  from: number,
+  to: number,
+  bounds: Map<number, PageBounds>,
+  firstTop: number,
+  lastBottom: number | null
+): Segment[] {
+  const segments: Segment[] = [];
+  let i = from;
+  while (i < to) {
+    const page = lines[i]!.page;
+    let j = i;
+    while (j + 1 < to && lines[j + 1]!.page === page) j++;
+    const b = bounds.get(page)!;
+    const top = i === from ? firstTop : lines[i]!.top - GAP;
+    const bottom = j === to - 1 && lastBottom !== null ? lastBottom : lines[j]!.bottom + GAP;
+    segments.push({
+      page,
+      rect: { x: b.minX - PAD, y: top, w: b.maxX - b.minX + 2 * PAD, h: bottom - top },
+    });
+    i = j + 1;
+  }
+  return segments;
+}
+
+interface ParsedQuestion {
+  anchorIndex: number;
+  tailEnd: number;
+  optionIndices: number[];
+  labels: LabelMatch[];
+  letters: string[];
+}
+
 function parseQuestionBlock(
-  lines: TextLine[],
+  lines: GlobalLine[],
   anchorIndex: number,
   laterNumbers: Set<number>
 ): ParsedQuestion | null {
@@ -105,82 +169,72 @@ function parseQuestionBlock(
       from = found + 1;
     }
     if (optionIndices.length === 4) {
-      return { anchorIndex, endIndex, optionIndices, labels, letters };
+      const tailEnd = contentEnd(lines, optionIndices[3]!, endIndex);
+      return { anchorIndex, tailEnd, optionIndices, labels, letters };
     }
   }
   return null;
 }
 
-function columnBounds(lines: TextLine[], from: number, to: number): { minX: number; maxX: number } {
-  let minX = Infinity;
-  let maxX = -Infinity;
-  for (let i = from; i < to; i++) {
-    minX = Math.min(minX, lines[i]!.minX);
-    maxX = Math.max(maxX, lines[i]!.maxX);
-  }
-  return { minX: minX - PAD, maxX: maxX + PAD };
-}
-
-function buildLayout(question: AnalyzedQuestion, page: number, lines: TextLine[], parsed: ParsedQuestion): QuestionLayout {
-  const { anchorIndex, endIndex, optionIndices, labels } = parsed;
+function buildLayout(question: AnalyzedQuestion, lines: GlobalLine[], parsed: ParsedQuestion): QuestionLayout {
+  const { anchorIndex, tailEnd, optionIndices, labels } = parsed;
   const rtl = parsed.letters[0] === "א";
-  const bounds = columnBounds(lines, anchorIndex, endIndex);
+  const bounds = boundsByPage(lines, anchorIndex, tailEnd);
   const anchor = lines[anchorIndex]!;
-  const firstOption = lines[optionIndices[0]!]!;
-  const lastLine = lines[endIndex - 1]!;
+  const firstOptionIndex = optionIndices[0]!;
+  const firstOption = lines[firstOptionIndex]!;
 
-  // Line boundaries sit at top+1: below the previous line's descender tips,
-  // above the line's own ascenders.
-  const stem: Rect = {
-    x: bounds.minX,
-    y: anchor.top - PAD,
-    w: bounds.maxX - bounds.minX,
-    h: firstOption.top + 1 - (anchor.top - PAD),
-  };
+  const stemLastBottom =
+    lines[firstOptionIndex - 1]!.page === firstOption.page ? firstOption.top + 1 : null;
+  const stem = segmentsForRange(
+    lines,
+    anchorIndex,
+    firstOptionIndex,
+    bounds,
+    anchor.top - PAD,
+    stemLastBottom
+  );
 
   const options: OptionLayout[] = optionIndices.map((lineIndex, k) => {
     const line = lines[lineIndex]!;
     const label = labels[k]!;
-    const top = line.top + 1;
-    const bottom = k < 3 ? lines[optionIndices[k + 1]!]!.top + 1 : lastLine.bottom + GAP;
-    const rect: Rect = { x: bounds.minX, y: top, w: bounds.maxX - bounds.minX, h: bottom - top };
-    const labelWidth = rtl ? bounds.maxX - label.labelMinX : label.labelMaxX - bounds.minX;
-    return { rect, labelWidth, labelExact: label.exact, firstLineHeight: line.bottom - line.top };
+    const nextStart = k < 3 ? optionIndices[k + 1]! : tailEnd;
+    const nextLine = k < 3 ? lines[optionIndices[k + 1]!]! : null;
+    const lastBottom =
+      nextLine && lines[nextStart - 1]!.page === nextLine.page ? nextLine.top + 1 : null;
+
+    const segments = segmentsForRange(lines, lineIndex, nextStart, bounds, line.top + 1, lastBottom);
+    const pageBounds = bounds.get(line.page)!;
+    const labelWidth = rtl
+      ? pageBounds.maxX + PAD - label.labelMinX
+      : label.labelMaxX - (pageBounds.minX - PAD);
+    return { segments, labelWidth, labelExact: label.exact, firstLineHeight: line.bottom - line.top };
   });
 
-  return { number: question.number, page, kind: "mcq", stem, options };
+  return { number: question.number, page: anchor.page, kind: "mcq", stem, options };
 }
 
 function buildOpenLayout(
   question: AnalyzedQuestion,
-  page: number,
-  lines: TextLine[],
+  lines: GlobalLine[],
   anchorIndex: number,
   laterNumbers: Set<number>
 ): QuestionLayout {
   const endIndex = blockEnd(lines, anchorIndex, laterNumbers);
-  const bounds = columnBounds(lines, anchorIndex, endIndex);
+  const tailEnd = contentEnd(lines, anchorIndex, endIndex);
+  const bounds = boundsByPage(lines, anchorIndex, tailEnd);
   const anchor = lines[anchorIndex]!;
-  const lastLine = lines[endIndex - 1]!;
-  const stem: Rect = {
-    x: bounds.minX,
-    y: anchor.top - PAD,
-    w: bounds.maxX - bounds.minX,
-    h: lastLine.bottom + PAD - (anchor.top - PAD),
-  };
-  return { number: question.number, page, kind: "open", stem, options: [] };
+  const stem = segmentsForRange(lines, anchorIndex, tailEnd, bounds, anchor.top - PAD, null);
+  return { number: question.number, page: anchor.page, kind: "open", stem, options: [] };
 }
 
 export async function locateQuestions(pdf: LoadedPdf, questions: AnalyzedQuestion[]): Promise<QuestionLayout[]> {
-  const lineCache = new Map<number, TextLine[]>();
-  const linesOf = async (page: number): Promise<TextLine[]> => {
-    let lines = lineCache.get(page);
-    if (!lines) {
-      lines = await pdf.textLines(page);
-      lineCache.set(page, lines);
+  const lines: GlobalLine[] = [];
+  for (let page = 1; page <= pdf.numPages; page++) {
+    for (const line of await pdf.textLines(page)) {
+      lines.push({ ...line, page });
     }
-    return lines;
-  };
+  }
 
   const allNumbers = questions.map((q) => q.number);
   const layouts: QuestionLayout[] = [];
@@ -188,27 +242,23 @@ export async function locateQuestions(pdf: LoadedPdf, questions: AnalyzedQuestio
 
   for (const [qi, question] of questions.entries()) {
     const laterNumbers = new Set(allNumbers.slice(qi + 1));
-    const candidatePages = [
-      question.page,
-      ...Array.from({ length: pdf.numPages }, (_, i) => i + 1).filter((p) => p !== question.page),
-    ].filter((p) => p >= 1 && p <= pdf.numPages);
+
+    const candidates = lines
+      .map((line, index) => ({ line, index }))
+      .filter(({ line }) => questionNumberOf(line.text) === question.number)
+      .sort((a, b) => Number(b.line.page === question.page) - Number(a.line.page === question.page));
 
     let located: QuestionLayout | null = null;
-    for (const page of candidatePages) {
-      const lines = await linesOf(page);
-      for (let i = 0; i < lines.length; i++) {
-        if (questionNumberOf(lines[i]!.text) !== question.number) continue;
-        if (question.kind === "open") {
-          located = buildOpenLayout(question, page, lines, i, laterNumbers);
-          break;
-        }
-        const parsed = parseQuestionBlock(lines, i, laterNumbers);
-        if (parsed) {
-          located = buildLayout(question, page, lines, parsed);
-          break;
-        }
+    for (const { index } of candidates) {
+      if (question.kind === "open") {
+        located = buildOpenLayout(question, lines, index, laterNumbers);
+        break;
       }
-      if (located) break;
+      const parsed = parseQuestionBlock(lines, index, laterNumbers);
+      if (parsed) {
+        located = buildLayout(question, lines, parsed);
+        break;
+      }
     }
 
     if (located) layouts.push(located);

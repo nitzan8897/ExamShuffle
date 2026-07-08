@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { analyzeExam } from "../ai/analyze.js";
 import { LoadedPdf, type RenderedPage } from "../pdf/pdf.js";
 import { renderPdf } from "../pdf/render.js";
-import { cropOptionRow, cropRegion } from "./crop.js";
+import { cropOptionRow, cropSegments } from "./crop.js";
 import { locateQuestions } from "./layout.js";
 import { fisherYates, lettersFor } from "./shuffle.js";
 import { buildHtml } from "./template.js";
@@ -67,8 +67,7 @@ export async function runPipeline(
 
     for (const [i, layout] of layouts.entries()) {
       const question = analyzed.questions[i]!;
-      const page = await renderedPage(layout.page);
-      const stem = cropRegion(page, layout.stem);
+      const stem = await cropSegments(renderedPage, layout.stem, rtl);
 
       if (question.kind === "open" && options.openMode === "keep") {
         questions.push({
@@ -82,17 +81,20 @@ export async function runPipeline(
         continue;
       }
 
-      const sources: OptionSource[] =
-        question.kind === "open"
-          ? textOptionSources(question)
-          : layout.options.map((option, k) => ({
-              content: (() => {
-                const crop = cropOptionRow(page, option, rtl);
-                return { type: "image", dataUri: crop.dataUri, widthPx: crop.widthPx } as const;
-              })(),
-              isCorrect: k === 0,
-              note: [question.correctExplanation!, ...question.wrongRefutations!][k]!,
-            }));
+      const sources: OptionSource[] = [];
+      if (question.kind === "open") {
+        sources.push(...textOptionSources(question));
+      } else {
+        const notes = [question.correctExplanation!, ...question.wrongRefutations!];
+        for (const [k, option] of layout.options.entries()) {
+          const crop = await cropOptionRow(renderedPage, option, rtl);
+          sources.push({
+            content: { type: "image", dataUri: crop.dataUri, widthPx: crop.widthPx },
+            isCorrect: k === 0,
+            note: notes[k]!,
+          });
+        }
+      }
 
       const shuffled = fisherYates(sources);
       const correctIndex = shuffled.findIndex((o) => o.isCorrect);

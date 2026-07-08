@@ -6,7 +6,10 @@ import puppeteer from "puppeteer";
 interface SampleQuestion {
   q: string;
   opts: string[];
+  spacerBefore?: number;
 }
+
+const LONG = "זוהי אפשרות ארוכה במיוחד שנועדה לבדוק גלישה לשורה שנייה ושלישית וכן המשך של תוכן שאלה בין שני עמודים שונים בקובץ ה-PDF, ולכן היא מכילה טקסט רב.";
 
 const QUESTIONS: SampleQuestion[] = [
   { q: "מהי בירת צרפת?", opts: ["פריז", "לונדון", "ברלין", "מדריד"] },
@@ -23,7 +26,7 @@ const QUESTIONS: SampleQuestion[] = [
     opts: ["חלב", "לחם", "גבינה", "כל המוצרים באותו מחיר"],
   },
   {
-    q: "מהם הפתרונות של המשוואה <span dir=\"ltr\">x<sup>2</sup> − 9 = 0</span>?",
+    q: 'מהם הפתרונות של המשוואה <span dir="ltr">x<sup>2</sup> − 9 = 0</span>?',
     opts: ["x = ±3", "x = 3 בלבד", "x = 9", "x = ±9"],
   },
   {
@@ -37,6 +40,18 @@ const QUESTIONS: SampleQuestion[] = [
     q: "הסבירו בקצרה מדוע השמיים נראים כחולים ביום בהיר.",
     opts: [],
   },
+  {
+    // Pushed near the bottom so its long options continue onto the next page —
+    // exercises cross-page question support.
+    spacerBefore: 520,
+    q: "איזה מהמשפטים מתאר בצורה הנכונה ביותר את תהליך הפוטוסינתזה בצמחים ירוקים?",
+    opts: [
+      `הצמח קולט אנרגיית אור באמצעות הכלורופיל שבעלים וממיר פחמן דו-חמצני ומים לסוכר וחמצן. ${LONG}`,
+      `הצמח קולט חמצן מהאוויר בלילה ופולט פחמן דו-חמצני, בתהליך הפוך לנשימה. ${LONG}`,
+      `הצמח שואב סוכר ישירות מהקרקע דרך השורשים ואינו זקוק לאור כלל. ${LONG}`,
+      `הצמח ממיר חלבונים לשומנים באמצעות אנרגיית חום מהשמש. ${LONG}`,
+    ],
+  },
 ];
 
 const LETTERS = ["א", "ב", "ג", "ד"];
@@ -49,6 +64,8 @@ const html = `<!DOCTYPE html>
   .intro { text-align: center; margin-top: 120px; page-break-after: always; }
   .q { margin: 18px 0; }
   .q b { display: block; margin-bottom: 6px; }
+  .spacer { display: block; }
+  .trailer { margin-top: 60px; text-align: center; font-weight: bold; }
 </style></head>
 <body>
   <div class="intro">
@@ -60,11 +77,13 @@ const html = `<!DOCTYPE html>
   </div>
   ${QUESTIONS.map(
     (item, i) => `
+  ${item.spacerBefore ? `<div class="spacer" style="height:${item.spacerBefore}px"></div>` : ""}
   <div class="q">
     <b>${i + 1}. ${item.q}</b>
     ${item.opts.map((o, j) => `<div>${LETTERS[j]}. ${o}</div>`).join("")}
   </div>`
   ).join("")}
+  <div class="trailer">--- סוף הבחינה ---</div>
 </body>
 </html>`;
 

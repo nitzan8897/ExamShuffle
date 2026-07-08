@@ -38,8 +38,14 @@ export interface Rect {
   h: number;
 }
 
-export interface OptionLayout {
+/** One per-page slice of a region; regions may span pages. */
+export interface Segment {
+  page: number;
   rect: Rect;
+}
+
+export interface OptionLayout {
+  segments: Segment[];
   labelWidth: number;
   labelExact: boolean;
   firstLineHeight: number;
@@ -49,7 +55,7 @@ export interface QuestionLayout {
   number: number;
   page: number;
   kind: QuestionKind;
-  stem: Rect;
+  stem: Segment[];
   options: OptionLayout[];
 }
 

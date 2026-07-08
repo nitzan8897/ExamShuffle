@@ -1,6 +1,6 @@
 import { createCanvas, type Canvas } from "@napi-rs/canvas";
 import { RENDER_SCALE, type RenderedPage } from "../pdf/pdf.js";
-import type { OptionLayout, Rect } from "../shared/types.js";
+import type { OptionLayout, Rect, Segment } from "../shared/types.js";
 
 // Rendered pixels -> CSS px so crops print at their original physical size
 // (PDF is 72dpi-based, CSS is 96dpi-based).
@@ -9,6 +9,8 @@ export const CSS_SCALE = 96 / 72 / RENDER_SCALE;
 const INK_THRESHOLD = 245;
 const LABEL_GAP_PX = Math.round(2.2 * RENDER_SCALE);
 const MAX_LABEL_SHARE = 0.3;
+
+export type PageGetter = (pageNumber: number) => Promise<RenderedPage>;
 
 export interface Crop {
   dataUri: string;
@@ -32,8 +34,33 @@ function cropCanvas(page: RenderedPage, rect: Rect): Canvas {
   return canvas;
 }
 
-export function cropRegion(page: RenderedPage, rect: Rect): Crop {
-  return toCrop(cropCanvas(page, rect));
+/** Stack per-page slices vertically into one image, label-side aligned. */
+function mergeVertically(canvases: Canvas[], rtl: boolean): Canvas {
+  if (canvases.length === 1) return canvases[0]!;
+  const width = Math.max(...canvases.map((c) => c.width));
+  const height = canvases.reduce((sum, c) => sum + c.height, 0);
+  const merged = createCanvas(width, height);
+  const ctx = merged.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  let y = 0;
+  for (const canvas of canvases) {
+    ctx.drawImage(canvas, rtl ? width - canvas.width : 0, y);
+    y += canvas.height;
+  }
+  return merged;
+}
+
+async function segmentCanvases(getPage: PageGetter, segments: Segment[]): Promise<Canvas[]> {
+  const canvases: Canvas[] = [];
+  for (const segment of segments) {
+    canvases.push(cropCanvas(await getPage(segment.page), segment.rect));
+  }
+  return canvases;
+}
+
+export async function cropSegments(getPage: PageGetter, segments: Segment[], rtl: boolean): Promise<Crop> {
+  return toCrop(mergeVertically(await segmentCanvases(getPage, segments), rtl));
 }
 
 /**
@@ -115,20 +142,21 @@ function trimHorizontal(canvas: Canvas): Canvas {
   return trimmed;
 }
 
-export function cropOptionRow(page: RenderedPage, option: OptionLayout, rtl: boolean): Crop {
-  const canvas = cropCanvas(page, option.rect);
-  const ctx = canvas.getContext("2d");
+export async function cropOptionRow(getPage: PageGetter, option: OptionLayout, rtl: boolean): Promise<Crop> {
+  const canvases = await segmentCanvases(getPage, option.segments);
+  const first = canvases[0]!;
+  const ctx = first.getContext("2d");
 
   const bandHeightPx = Math.ceil((option.firstLineHeight + 2) * RENDER_SCALE);
   const eraseWidth = option.labelExact
     ? Math.ceil((option.labelWidth + 1.5) * RENDER_SCALE)
-    : measureLabel(canvas, rtl, bandHeightPx) ?? Math.ceil((option.labelWidth + 1) * RENDER_SCALE);
+    : measureLabel(first, rtl, bandHeightPx) ?? Math.ceil((option.labelWidth + 1) * RENDER_SCALE);
 
   ctx.fillStyle = "#ffffff";
   if (rtl) {
-    ctx.fillRect(canvas.width - eraseWidth, 0, eraseWidth, Math.min(canvas.height, bandHeightPx));
+    ctx.fillRect(first.width - eraseWidth, 0, eraseWidth, Math.min(first.height, bandHeightPx));
   } else {
-    ctx.fillRect(0, 0, eraseWidth, Math.min(canvas.height, bandHeightPx));
+    ctx.fillRect(0, 0, eraseWidth, Math.min(first.height, bandHeightPx));
   }
-  return toCrop(trimHorizontal(canvas));
+  return toCrop(trimHorizontal(mergeVertically(canvases, rtl)));
 }
