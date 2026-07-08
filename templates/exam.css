@@ -97,6 +97,50 @@ body {
   font-weight: 700;
 }
 
+/* ---------- verbatim content: tables & math ---------- */
+.question-text,
+.option-text,
+.key-answer-text {
+  /* fragments may contain block content (tables); keep flex/inline parents sane */
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+}
+
+.question table,
+.answer-key table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 10.5pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.question td,
+.question th,
+.answer-key td,
+.answer-key th {
+  border: 1px solid #555;
+  padding: 4px 10px;
+  text-align: center;
+}
+
+.question th,
+.answer-key th {
+  background: #efefef;
+  font-weight: 700;
+}
+
+math {
+  font-size: 1.05em;
+  direction: ltr; /* formulas always read LTR, even inside RTL text */
+}
+
+sup,
+sub {
+  line-height: 0; /* keep exponents from stretching line height */
+}
+
 /* ---------- answer key: always starts on a fresh page ---------- */
 .answer-key {
   page-break-before: always;

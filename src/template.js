@@ -16,6 +16,17 @@ const escapeHtml = (s) =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 
+/**
+ * Question/option fields arrive as minimal HTML fragments (tables, <sup>/<sub>,
+ * MathML) so the original form is preserved verbatim. Rendered as-is after
+ * stripping anything executable.
+ */
+const sanitizeFragment = (s) =>
+  String(s ?? "")
+    .replace(/<\s*(script|style|iframe|object|embed|link|meta)\b[\s\S]*?(<\s*\/\s*\1\s*>|$)/gi, "")
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/(href|src)\s*=\s*("javascript:[^"]*"|'javascript:[^']*')/gi, "");
+
 /** Split an array into chunks of n (used to force 2 questions per page). */
 const chunk = (arr, n) =>
   Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
@@ -43,7 +54,7 @@ function renderQuestion(q, t) {
     <section class="question">
       <div class="question-title">
         <span class="question-number">${q.number}</span>
-        ${escapeHtml(q.question)}
+        <span class="question-text">${sanitizeFragment(q.question)}</span>
       </div>
       <ul class="options">
         ${q.options
@@ -51,7 +62,7 @@ function renderQuestion(q, t) {
             (o) => `
         <li>
           <span class="option-letter">${o.letter}</span>
-          <span class="option-text">${escapeHtml(o.text)}</span>
+          <span class="option-text">${sanitizeFragment(o.text)}</span>
         </li>`
           )
           .join("")}
@@ -67,10 +78,10 @@ function renderKeyEntry(q, t) {
       <div class="key-answer">
         ${t.question} ${q.number}:
         <span class="correct-letter">${q.correctLetter}</span>
-        — ${escapeHtml(correct.text)}
+        — <span class="key-answer-text">${sanitizeFragment(correct.text)}</span>
       </div>
       <div class="key-explanation">
-        <strong>${t.why}:</strong> ${escapeHtml(correct.note)}
+        <strong>${t.why}:</strong> ${sanitizeFragment(correct.note)}
       </div>
       <div class="key-refutations">
         <strong>${t.whyNot}:</strong>
@@ -78,7 +89,7 @@ function renderKeyEntry(q, t) {
           ${wrong
             .map(
               (o) => `
-          <li><span class="ref-letter">${o.letter}</span> — ${escapeHtml(o.note)}</li>`
+          <li><span class="ref-letter">${o.letter}</span> — ${sanitizeFragment(o.note)}</li>`
             )
             .join("")}
         </ul>
