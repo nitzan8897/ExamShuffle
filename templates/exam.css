@@ -1,0 +1,157 @@
+@page {
+  size: A4;
+  margin: 18mm 16mm;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html[dir="rtl"] body {
+  direction: rtl;
+  text-align: right;
+}
+
+body {
+  font-family: "Noto Sans Hebrew", "Segoe UI", "Arial Hebrew", Arial, "David", sans-serif;
+  font-size: 12pt;
+  line-height: 1.55;
+  color: #1a1a1a;
+}
+
+/* ---------- exam header ---------- */
+.exam-header {
+  text-align: center;
+  border-bottom: 2px solid #1a1a1a;
+  padding-bottom: 10px;
+  margin-bottom: 22px;
+}
+
+.exam-header h1 {
+  font-size: 18pt;
+  font-weight: 700;
+}
+
+.exam-header .subtitle {
+  font-size: 10pt;
+  color: #555;
+  margin-top: 4px;
+}
+
+/* ---------- questions: exactly 2 per page ---------- */
+.question-pair {
+  page-break-after: always;
+  break-after: page;
+}
+
+.question-pair:last-of-type {
+  page-break-after: auto;
+  break-after: auto;
+}
+
+.question {
+  page-break-inside: avoid;
+  break-inside: avoid;
+  margin-bottom: 26px;
+}
+
+.question-title {
+  font-weight: 700;
+  font-size: 12.5pt;
+  margin-bottom: 10px;
+}
+
+.question-number {
+  display: inline-block;
+  background: #1a1a1a;
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 9px;
+  margin-inline-end: 8px;
+  font-size: 11pt;
+}
+
+.options {
+  list-style: none;
+  margin-inline-start: 6px;
+}
+
+.options li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.option-letter {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid #1a1a1a;
+  border-radius: 50%;
+  text-align: center;
+  line-height: 20px;
+  font-size: 10.5pt;
+  font-weight: 700;
+}
+
+/* ---------- answer key: always starts on a fresh page ---------- */
+.answer-key {
+  page-break-before: always;
+  break-before: page;
+}
+
+.answer-key h2 {
+  text-align: center;
+  font-size: 16pt;
+  border-bottom: 2px solid #1a1a1a;
+  padding-bottom: 8px;
+  margin-bottom: 18px;
+}
+
+.key-entry {
+  page-break-inside: avoid;
+  break-inside: avoid;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  background: #fafafa;
+}
+
+.key-answer {
+  font-weight: 700;
+  font-size: 12.5pt;
+  margin-bottom: 6px;
+}
+
+.key-answer .correct-letter {
+  color: #0a6e0a;
+}
+
+.key-explanation {
+  margin-bottom: 8px;
+}
+
+.key-explanation strong,
+.key-refutations strong {
+  font-size: 10.5pt;
+}
+
+.key-refutations ul {
+  list-style: none;
+  margin-top: 4px;
+}
+
+.key-refutations li {
+  padding: 2px 0;
+  font-size: 10.5pt;
+  color: #444;
+}
+
+.key-refutations .ref-letter {
+  font-weight: 700;
+  color: #8a1f1f;
+}
