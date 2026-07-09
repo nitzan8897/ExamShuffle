@@ -21,6 +21,17 @@ export interface ShuffleSettings {
   openMode: "" | "convert" | "keep" | "remove";
 }
 
+export interface ServerConfig {
+  hasKey: boolean;
+  hasModel: boolean;
+}
+
+export async function fetchConfig(): Promise<ServerConfig> {
+  const res = await fetch("/api/config");
+  if (!res.ok) throw new Error("שגיאת שרת");
+  return (await res.json()) as ServerConfig;
+}
+
 export async function uploadExams(files: File[], settings: ShuffleSettings): Promise<JobRef[]> {
   const form = new FormData();
   for (const file of files) form.append("exams", file);

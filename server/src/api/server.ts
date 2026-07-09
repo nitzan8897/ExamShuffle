@@ -27,6 +27,13 @@ const decodeName = (raw: string): string => Buffer.from(raw, "latin1").toString(
 
 const OPEN_MODES: readonly OpenMode[] = ["convert", "keep", "remove"];
 
+app.get("/api/config", (_req, res) => {
+  res.json({
+    hasKey: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    hasModel: Boolean(process.env.GEMINI_MODEL?.trim()),
+  });
+});
+
 let queue: Promise<unknown> = Promise.resolve();
 const enqueue = (task: () => Promise<void>): void => {
   queue = queue.then(task, task);
