@@ -51,12 +51,20 @@ export async function runPipeline(
     const layouts = await locateQuestions(pdf, analyzed.questions);
 
     onProgress("גוזר ומערבל שאלות...", 65);
+    // Rendered pages are ~12MB each at RENDER_SCALE; questions arrive in page
+    // order, so keeping more than the current + previous page only burns RAM
+    // (small containers get OOM-killed mid-job).
+    const MAX_CACHED_PAGES = 2;
     const pageCache = new Map<number, RenderedPage>();
     const renderedPage = async (n: number): Promise<RenderedPage> => {
       let page = pageCache.get(n);
       if (!page) {
         page = await pdf.renderPage(n);
         pageCache.set(n, page);
+        for (const key of pageCache.keys()) {
+          if (pageCache.size <= MAX_CACHED_PAGES) break;
+          pageCache.delete(key);
+        }
       }
       return page;
     };

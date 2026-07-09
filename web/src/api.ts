@@ -50,9 +50,13 @@ export async function uploadExams(files: File[], settings: ShuffleSettings): Pro
   return jobs;
 }
 
+/** The server responded but no longer knows this job. */
+export class JobNotFoundError extends Error {}
+
 export async function fetchJob(jobId: string): Promise<JobState> {
   const res = await fetch(`/api/jobs/${jobId}`);
-  if (!res.ok) throw new Error("המשימה לא נמצאה");
+  if (res.status === 404) throw new JobNotFoundError("המשימה לא נמצאה");
+  if (!res.ok) throw new Error("שגיאת שרת");
   return (await res.json()) as JobState;
 }
 

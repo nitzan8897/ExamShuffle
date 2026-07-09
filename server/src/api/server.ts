@@ -6,7 +6,14 @@ import express from "express";
 import multer from "multer";
 import { runPipeline } from "../exam/pipeline.js";
 import type { OpenMode, PipelineOptions } from "../shared/types.js";
-import { createJob, getJob, pruneJobs, type Job } from "./jobs.js";
+import { createJob, getJob, initJobStore, persistJobs, pruneJobs, type Job } from "./jobs.js";
+
+// Surface fatal errors in the host's logs (Railway) instead of dying silently.
+process.on("unhandledRejection", (err) => console.error("unhandledRejection:", err));
+process.on("uncaughtException", (err) => {
+  console.error("uncaughtException:", err);
+  process.exit(1);
+});
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const uploadsDir = path.resolve(here, "../../uploads");
@@ -15,6 +22,7 @@ const webDist = path.resolve(here, "../../../web/dist");
 
 await mkdir(uploadsDir, { recursive: true });
 await mkdir(outputDir, { recursive: true });
+initJobStore(path.join(outputDir, "jobs.json"));
 
 const upload = multer({
   dest: uploadsDir,
@@ -126,9 +134,11 @@ app.post(
           job.outputPath = outputPath;
           job.downloadName = `${baseName}.shuffled.pdf`;
         } catch (err) {
+          console.error(`job ${job.id} (${job.fileName}) failed:`, err);
           job.status = "error";
           job.error = err instanceof Error ? err.message : String(err);
         } finally {
+          persistJobs();
           await unlink(file.path).catch(() => {});
         }
       });

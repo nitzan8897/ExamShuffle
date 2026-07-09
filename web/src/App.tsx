@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { downloadUrl, fetchConfig, fetchJob, uploadExams, type ServerConfig, type ShuffleSettings } from "./api";
+import {
+  downloadUrl,
+  fetchConfig,
+  fetchJob,
+  JobNotFoundError,
+  uploadExams,
+  type ServerConfig,
+  type ShuffleSettings,
+} from "./api";
 import { FileDrop } from "./components/FileDrop";
 import { JobRow, type TrackedJob } from "./components/JobRow";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -7,6 +15,10 @@ import { Toast } from "./components/Toast";
 import { loadJobs, saveJobs } from "./persist";
 
 const POLL_MS = 800;
+// A restarting server answers polls with 502s for a while — keep the job
+// alive through ~40s of failed polls and only give up after that (or on a
+// definitive 404).
+const MAX_POLL_MISSES = 50;
 
 const DEFAULT_SETTINGS: ShuffleSettings = {
   model: "",
@@ -23,6 +35,7 @@ export function App() {
   const [toast, setToast] = useState("");
   const [uploading, setUploading] = useState(false);
   const downloaded = useRef(new Set<string>(loadJobs().filter((j) => j.state.status === "done").map((j) => j.jobId)));
+  const pollMisses = useRef(new Map<string, number>());
 
   const busy = uploading || jobs.some((j) => j.state.status === "processing");
   const allSettled = jobs.length > 0 && !busy;
@@ -52,15 +65,28 @@ export function App() {
           if (job.state.status !== "processing") return job;
           try {
             const state = await fetchJob(job.jobId);
+            pollMisses.current.delete(job.jobId);
             if (state.status === "done" && !downloaded.current.has(job.jobId)) {
               downloaded.current.add(job.jobId);
               startDownload(job.jobId);
             }
             return { ...job, state };
-          } catch {
+          } catch (err) {
+            if (!(err instanceof JobNotFoundError)) {
+              const misses = (pollMisses.current.get(job.jobId) ?? 0) + 1;
+              pollMisses.current.set(job.jobId, misses);
+              if (misses < MAX_POLL_MISSES) return job;
+            }
             return {
               ...job,
-              state: { ...job.state, status: "error" as const, error: "המשימה אבדה בשרת (ייתכן שפג תוקפה)" },
+              state: {
+                ...job.state,
+                status: "error" as const,
+                error:
+                  err instanceof JobNotFoundError
+                    ? "המשימה אבדה בשרת (ייתכן שפג תוקפה)"
+                    : "החיבור לשרת אבד — נסו להעלות את הקובץ שוב",
+              },
             };
           }
         })
