@@ -69,6 +69,64 @@ function matchLetterLabel(line: TextLine, letter: string, rtl: boolean): LabelMa
   return null;
 }
 
+// Running headers/footers (e.g. "מבחן מס 000 קוד מבחן :" printed at the top
+// of every source page) must not leak into crops when a question or option
+// continues onto a new page: the header line at the top of the continuation
+// page falls inside the captured line range and gets swept into the crop.
+// A line is treated as a running header/footer when its digit-normalized text
+// repeats at a similar vertical position inside the top/bottom margin band on
+// enough pages. Lines that parse as question anchors are never dropped —
+// consecutive pages often start with "שאלה מספר N :" at the exact same offset,
+// which would otherwise look like a repeating header.
+const MARGIN_BAND = 0.12;
+const REPEAT_POSITION_TOLERANCE = 0.02;
+const REPEAT_PAGE_SHARE = 0.4;
+
+/** Normalize for repetition tests: trim, collapse whitespace, mask digit runs. */
+function repeatKey(text: string): string {
+  return text.trim().replace(/\s+/g, " ").replace(/\d+/g, "#");
+}
+
+function dropRunningHeadersFooters(
+  lines: GlobalLine[],
+  pageHeights: Map<number, number>,
+  numPages: number
+): GlobalLine[] {
+  if (numPages < 2) return lines;
+  const minPages = Math.max(2, Math.ceil(numPages * REPEAT_PAGE_SHARE));
+
+  interface Candidate {
+    index: number;
+    page: number;
+    rel: number;
+  }
+  const groups = new Map<string, Candidate[]>();
+  lines.forEach((line, index) => {
+    if (questionNumberOf(line.text) !== null) return;
+    const height = pageHeights.get(line.page)!;
+    const rel = line.top / height;
+    if (rel > MARGIN_BAND && line.bottom / height < 1 - MARGIN_BAND) return;
+    const candidate = { index, page: line.page, rel };
+    const group = groups.get(repeatKey(line.text));
+    if (group) group.push(candidate);
+    else groups.set(repeatKey(line.text), [candidate]);
+  });
+
+  const dropped = new Set<number>();
+  for (const group of groups.values()) {
+    group.sort((a, b) => a.rel - b.rel);
+    let start = 0;
+    for (let i = 1; i <= group.length; i++) {
+      if (i < group.length && group[i]!.rel - group[i - 1]!.rel <= REPEAT_POSITION_TOLERANCE) continue;
+      const cluster = group.slice(start, i);
+      start = i;
+      if (new Set(cluster.map((c) => c.page)).size < minPages) continue;
+      for (const c of cluster) dropped.add(c.index);
+    }
+  }
+  return dropped.size > 0 ? lines.filter((_, index) => !dropped.has(index)) : lines;
+}
+
 function blockEnd(lines: GlobalLine[], anchorIndex: number, laterNumbers: Set<number>): number {
   for (let i = anchorIndex + 1; i < lines.length; i++) {
     const n = questionNumberOf(lines[i]!.text);
@@ -229,12 +287,15 @@ function buildOpenLayout(
 }
 
 export async function locateQuestions(pdf: LoadedPdf, questions: AnalyzedQuestion[]): Promise<QuestionLayout[]> {
-  const lines: GlobalLine[] = [];
+  const allLines: GlobalLine[] = [];
+  const pageHeights = new Map<number, number>();
   for (let page = 1; page <= pdf.numPages; page++) {
+    pageHeights.set(page, await pdf.pageHeight(page));
     for (const line of await pdf.textLines(page)) {
-      lines.push({ ...line, page });
+      allLines.push({ ...line, page });
     }
   }
+  const lines = dropRunningHeadersFooters(allLines, pageHeights, pdf.numPages);
 
   const allNumbers = questions.map((q) => q.number);
   const layouts: QuestionLayout[] = [];

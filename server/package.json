@@ -15,6 +15,7 @@
     "@napi-rs/canvas": "^0.1.65",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
+    "mongodb": "^6.9.0",
     "multer": "^2.0.1",
     "pdfjs-dist": "^4.7.76",
     "puppeteer": "^24.10.0"

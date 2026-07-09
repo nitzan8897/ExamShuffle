@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
-import { unlink } from "node:fs/promises";
+import type { JobBackend } from "./jobStore.js";
 
 export type JobStatus = "processing" | "done" | "error";
 
@@ -20,37 +19,38 @@ export interface Job {
 const JOB_TTL_MS = 60 * 60 * 1000;
 const jobs = new Map<string, Job>();
 
-let storePath: string | undefined;
+let backend: JobBackend | undefined;
 
 /**
- * Jobs live in memory; the store file only makes a process restart
- * (crash/redeploy) survivable: restored "processing" jobs are marked as
- * errors so polling clients get a real message instead of a 404.
+ * Load persisted jobs into memory. Any job still "processing" was interrupted
+ * by the restart (no worker survives an OOM/redeploy to resume it), so surface
+ * it as an error instead of leaving clients polling forever.
  */
-export function initJobStore(filePath: string): void {
-  storePath = filePath;
-  try {
-    const restored = JSON.parse(readFileSync(filePath, "utf8")) as Job[];
-    for (const job of restored) {
-      if (job.status === "processing") {
-        job.status = "error";
-        job.error = "השרת הופעל מחדש במהלך העיבוד — נסו להעלות את הקובץ שוב";
-      }
-      jobs.set(job.id, job);
+export async function initJobStore(store: JobBackend): Promise<void> {
+  backend = store;
+  const restored = await store.loadAll();
+  for (const job of restored) {
+    if (job.status === "processing") {
+      job.status = "error";
+      job.error = "השרת הופעל מחדש במהלך העיבוד — נסו להעלות את הקובץ שוב";
     }
-  } catch {
-    // No store yet or unreadable — start empty.
+    jobs.set(job.id, job);
   }
   pruneJobs();
 }
 
+/** Write-through the full job set; fire-and-forget so routes stay responsive. */
 export function persistJobs(): void {
-  if (!storePath) return;
-  try {
-    writeFileSync(storePath, JSON.stringify([...jobs.values()]));
-  } catch (err) {
-    console.error("failed to persist jobs:", err);
-  }
+  if (!backend) return;
+  backend.sync([...jobs.values()]).catch((err) => console.error("failed to persist jobs:", err));
+}
+
+export function saveOutput(id: string, data: Buffer): Promise<void> {
+  return backend?.savePdf(id, data) ?? Promise.resolve();
+}
+
+export function loadOutput(id: string): Promise<Buffer | null> {
+  return backend?.loadPdf(id) ?? Promise.resolve(null);
 }
 
 export function createJob(fileName: string): Job {
@@ -77,7 +77,6 @@ export function pruneJobs(): void {
     if (now - job.createdAt > JOB_TTL_MS) {
       jobs.delete(id);
       changed = true;
-      if (job.outputPath) void unlink(job.outputPath).catch(() => {});
     }
   }
   if (changed) persistJobs();

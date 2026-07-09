@@ -6,7 +6,17 @@ import express from "express";
 import multer from "multer";
 import { runPipeline } from "../exam/pipeline.js";
 import type { OpenMode, PipelineOptions } from "../shared/types.js";
-import { createJob, getJob, initJobStore, persistJobs, pruneJobs, type Job } from "./jobs.js";
+import {
+  createJob,
+  getJob,
+  initJobStore,
+  loadOutput,
+  persistJobs,
+  pruneJobs,
+  saveOutput,
+  type Job,
+} from "./jobs.js";
+import { createBackend, FileBackend } from "./jobStore.js";
 
 // Surface fatal errors in the host's logs (Railway) instead of dying silently.
 process.on("unhandledRejection", (err) => console.error("unhandledRejection:", err));
@@ -22,7 +32,14 @@ const webDist = path.resolve(here, "../../../web/dist");
 
 await mkdir(uploadsDir, { recursive: true });
 await mkdir(outputDir, { recursive: true });
-initJobStore(path.join(outputDir, "jobs.json"));
+
+const outputPathFor = (id: string): string => path.join(outputDir, `${id}.pdf`);
+const fileBackend = new FileBackend(path.join(outputDir, "jobs.json"), outputPathFor);
+const backend = await createBackend(fileBackend, {
+  uri: process.env.MONGODB_URI,
+  dbName: process.env.MONGODB_DB,
+});
+await initJobStore(backend);
 
 const upload = multer({
   dest: uploadsDir,
@@ -122,7 +139,7 @@ app.post(
       const job = createJob(fileName);
       if (context.warning) job.warnings.push(context.warning);
       const baseName = path.basename(fileName, path.extname(fileName)).trim() || "exam";
-      const outputPath = path.join(outputDir, `${job.id}.pdf`);
+      const outputPath = outputPathFor(job.id);
 
       enqueue(async () => {
         try {
@@ -130,6 +147,11 @@ app.post(
             job.stage = stage;
             job.percent = percent;
           });
+          // Push the PDF to the durable store so it survives a restart/redeploy
+          // that wipes the ephemeral disk. A store hiccup must not fail the job.
+          await saveOutput(job.id, await readFile(outputPath)).catch((err) =>
+            console.error(`job ${job.id}: failed to persist output pdf:`, err)
+          );
           job.status = "done";
           job.outputPath = outputPath;
           job.downloadName = `${baseName}.shuffled.pdf`;
@@ -164,13 +186,28 @@ app.get("/api/jobs/:id", (req, res) => {
   });
 });
 
-app.get("/api/jobs/:id/download", (req, res) => {
+app.get("/api/jobs/:id/download", async (req, res) => {
   const job = getJob(req.params.id);
-  if (!job || job.status !== "done" || !job.outputPath) {
+  if (!job || job.status !== "done") {
     res.status(404).json({ error: "הקובץ אינו זמין" });
     return;
   }
-  res.download(job.outputPath, job.downloadName ?? "exam.shuffled.pdf");
+  const downloadName = job.downloadName ?? "exam.shuffled.pdf";
+
+  // Serve the local file when present; after a restart the ephemeral disk is
+  // gone, so fall back to the durable store.
+  if (job.outputPath && existsSync(job.outputPath)) {
+    res.download(job.outputPath, downloadName);
+    return;
+  }
+  const pdf = await loadOutput(job.id);
+  if (!pdf) {
+    res.status(404).json({ error: "הקובץ אינו זמין" });
+    return;
+  }
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(downloadName)}"`);
+  res.send(pdf);
 });
 
 if (existsSync(webDist)) {

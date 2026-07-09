@@ -77,9 +77,26 @@ installs Chromium + Hebrew/Latin fonts for Puppeteer), builds the web bundle, an
 1. Create a Railway project from this GitHub repo (it auto-detects the Dockerfile).
 2. Optionally set `GEMINI_API_KEY` and `GEMINI_MODEL` as service variables — otherwise
    users enter them in the UI.
-3. Deploy. The public URL serves the full app.
+3. Optionally set `MONGODB_URI` (and `MONGODB_DB`) to persist jobs and output PDFs — see
+   below.
+4. Deploy. The public URL serves the full app.
 
-Jobs are kept in memory, so run a single instance (do not scale to multiple replicas).
+### Job persistence
+
+Jobs run one at a time in memory. Without `MONGODB_URI`, job records fall back to a local
+`output/jobs.json` file and output PDFs live on the container's disk — both are lost when
+Railway restarts or redeploys the container (e.g. after an out-of-memory kill), so an
+in-flight upload comes back as "the task was lost".
+
+Set `MONGODB_URI` to a MongoDB connection string (any provider — MongoDB Atlas has a free
+tier) to store job records and the generated PDFs (in GridFS) durably: a restart then
+reports interrupted jobs as a clear error instead of a dead poll, and already-finished
+downloads keep working. If the URI is missing or unreachable the server logs a warning and
+falls back to the local file store, so a bad value never blocks startup.
+
+Still run a single instance — the in-memory queue is per-process (do not scale to multiple
+replicas). If uploads keep failing mid-job, the container is hitting its memory limit;
+raise the service's memory in Railway.
 
 For development (Vite hot reload on :5173, API on :3000):
 

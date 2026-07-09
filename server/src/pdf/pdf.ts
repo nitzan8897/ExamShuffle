@@ -49,6 +49,12 @@ export class LoadedPdf {
     return this.doc.numPages;
   }
 
+  /** Page height in PDF units (scale 1, same units as `textLines`). */
+  async pageHeight(pageNumber: number): Promise<number> {
+    const page = await this.doc.getPage(pageNumber);
+    return page.getViewport({ scale: 1 }).height;
+  }
+
   async renderPage(pageNumber: number): Promise<RenderedPage> {
     const page = await this.doc.getPage(pageNumber);
     const viewport = page.getViewport({ scale: RENDER_SCALE });
