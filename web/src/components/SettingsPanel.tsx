@@ -6,11 +6,23 @@ interface Props {
   disabled: boolean;
 }
 
-const MODEL_SUGGESTIONS = ["gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"];
+// Light, fast Gemini models suited to this extraction task.
+const LIGHT_MODELS = [
+  "gemini-3.1-flash-lite",
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.0-flash-lite",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash-8b",
+];
+
+const CUSTOM = "__custom__";
 
 export function SettingsPanel({ settings, onChange, disabled }: Props) {
   const set = <K extends keyof ShuffleSettings>(key: K, value: ShuffleSettings[K]) =>
     onChange({ ...settings, [key]: value });
+
+  const isKnown = settings.model === "" || LIGHT_MODELS.includes(settings.model);
 
   return (
     <details className="settings">
@@ -18,18 +30,28 @@ export function SettingsPanel({ settings, onChange, disabled }: Props) {
       <fieldset disabled={disabled} className="settings-body">
         <label className="field">
           <span>מודל Gemini</span>
-          <input
-            list="model-suggestions"
-            value={settings.model}
-            onChange={(e) => set("model", e.target.value)}
-            placeholder="ברירת מחדל מהשרת"
+          <select
+            value={isKnown ? settings.model : CUSTOM}
+            onChange={(e) => set("model", e.target.value === CUSTOM ? " " : e.target.value)}
             dir="ltr"
-          />
-          <datalist id="model-suggestions">
-            {MODEL_SUGGESTIONS.map((m) => (
-              <option key={m} value={m} />
+          >
+            <option value="">ברירת מחדל מהשרת</option>
+            {LIGHT_MODELS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
             ))}
-          </datalist>
+            <option value={CUSTOM}>אחר (הקלדה ידנית)</option>
+          </select>
+          {!isKnown && (
+            <input
+              value={settings.model.trim()}
+              onChange={(e) => set("model", e.target.value)}
+              placeholder="שם מודל מותאם אישית"
+              dir="ltr"
+              autoFocus
+            />
+          )}
         </label>
 
         <label className="field">
