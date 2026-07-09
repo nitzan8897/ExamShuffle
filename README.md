@@ -37,6 +37,10 @@ npm install
 cp .env.example .env   # then put your Gemini API key in .env
 ```
 
+The `.env` is optional — if it is missing, provide the Gemini API key and model in the
+UI's advanced settings instead. If neither the server nor the UI supplies them, the app
+shows a toast asking you to fill in the Gemini details.
+
 ## Web UI
 
 ```bash
@@ -60,6 +64,22 @@ Advanced settings (optional, collapsible panel):
 
 The output header shows the institution and course name on the first line and the exam
 term (מועד) below it, both extracted from the exam itself.
+
+A job keeps running on the server even if you close or refresh the tab — reopening the
+page restores the in-progress jobs and their download links.
+
+## Deploy (Railway)
+
+The repo ships a `Dockerfile` and `railway.json`. Railway builds the image (which
+installs Chromium + Hebrew/Latin fonts for Puppeteer), builds the web bundle, and runs
+`npm start`, which serves both the API and the built UI on `$PORT`.
+
+1. Create a Railway project from this GitHub repo (it auto-detects the Dockerfile).
+2. Optionally set `GEMINI_API_KEY` and `GEMINI_MODEL` as service variables — otherwise
+   users enter them in the UI.
+3. Deploy. The public URL serves the full app.
+
+Jobs are kept in memory, so run a single instance (do not scale to multiple replicas).
 
 For development (Vite hot reload on :5173, API on :3000):
 
