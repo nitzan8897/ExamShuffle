@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { downloadUrl, fetchJob, uploadExams, type ShuffleSettings } from "./api";
+import { downloadUrl, fetchConfig, fetchJob, uploadExams, type ServerConfig, type ShuffleSettings } from "./api";
 import { FileDrop } from "./components/FileDrop";
 import { JobRow, type TrackedJob } from "./components/JobRow";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { Toast } from "./components/Toast";
+import { loadJobs, saveJobs } from "./persist";
 
 const POLL_MS = 800;
 
@@ -16,13 +18,22 @@ const DEFAULT_SETTINGS: ShuffleSettings = {
 
 export function App() {
   const [settings, setSettings] = useState<ShuffleSettings>(DEFAULT_SETTINGS);
-  const [jobs, setJobs] = useState<TrackedJob[]>([]);
-  const [uploadError, setUploadError] = useState("");
+  const [jobs, setJobs] = useState<TrackedJob[]>(() => loadJobs());
+  const [config, setConfig] = useState<ServerConfig | null>(null);
+  const [toast, setToast] = useState("");
   const [uploading, setUploading] = useState(false);
-  const downloaded = useRef(new Set<string>());
+  const downloaded = useRef(new Set<string>(loadJobs().filter((j) => j.state.status === "done").map((j) => j.jobId)));
 
   const busy = uploading || jobs.some((j) => j.state.status === "processing");
   const allSettled = jobs.length > 0 && !busy;
+
+  useEffect(() => {
+    fetchConfig().then(setConfig).catch(() => setConfig({ hasKey: false, hasModel: false }));
+  }, []);
+
+  useEffect(() => {
+    saveJobs(jobs);
+  }, [jobs]);
 
   const startDownload = (jobId: string) => {
     const link = document.createElement("a");
@@ -49,7 +60,7 @@ export function App() {
           } catch {
             return {
               ...job,
-              state: { ...job.state, status: "error" as const, error: "המשימה אבדה בשרת" },
+              state: { ...job.state, status: "error" as const, error: "המשימה אבדה בשרת (ייתכן שפג תוקפה)" },
             };
           }
         })
@@ -59,8 +70,17 @@ export function App() {
     return () => clearInterval(timer);
   }, [jobs]);
 
+  const missingConfig = (): boolean => {
+    const hasKey = Boolean(settings.apiKey.trim()) || Boolean(config?.hasKey);
+    const hasModel = Boolean(settings.model.trim()) || Boolean(config?.hasModel);
+    return !hasKey || !hasModel;
+  };
+
   const onFiles = async (files: File[]) => {
-    setUploadError("");
+    if (missingConfig()) {
+      setToast("יש למלא מפתח ומודל Gemini בהגדרות המתקדמות");
+      return;
+    }
     setUploading(true);
     try {
       const refs = await uploadExams(files, settings);
@@ -71,7 +91,7 @@ export function App() {
         }))
       );
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "ההעלאה נכשלה");
+      setToast(err instanceof Error ? err.message : "ההעלאה נכשלה");
     } finally {
       setUploading(false);
     }
@@ -79,17 +99,18 @@ export function App() {
 
   const reset = () => {
     setJobs([]);
-    setUploadError("");
     downloaded.current.clear();
+    saveJobs([]);
   };
 
   return (
     <div className="page">
+      <header className="brand">
+        <img className="brand-logo" src="/assets/ExamShuffle.png" alt="ExamShuffle" />
+      </header>
+
       <main className="card">
-        <header className="app-header">
-          <img className="logo" src="/ExamShuffle.png" alt="ExamShuffle" />
-          <h1 className="title">ExamShuffle</h1>
-        </header>
+        <h1 className="title">ExamShuffle</h1>
         <p className="subtitle">
           מעלים מבחן אמריקאי (טופס 0), מקבלים גרסה עם תשובות מעורבלות, מפתח תשובות והסברים — מוכן
           ל-iPad
@@ -100,7 +121,6 @@ export function App() {
             <SettingsPanel settings={settings} onChange={setSettings} disabled={busy} />
             <FileDrop disabled={busy} onFiles={onFiles} />
             {uploading && <div className="job-stage center">מעלה קבצים...</div>}
-            {uploadError && <div className="error-text">{uploadError}</div>}
           </>
         )}
 
@@ -121,6 +141,8 @@ export function App() {
       <footer className="credits">
         נוצר על ידי <strong>ניצן אברג'יל</strong> · פותח יחד עם <strong>קלוד קוד המלך 👑</strong>
       </footer>
+
+      <Toast message={toast} onClose={() => setToast("")} />
     </div>
   );
 }
