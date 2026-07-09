@@ -1,6 +1,6 @@
 @page {
   size: A4;
-  margin: 16mm 14mm;
+  margin: 14mm 9mm;
 }
 
 * {
@@ -73,19 +73,16 @@ img {
 .options li {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   padding: 5px 0;
+  min-width: 0;
 }
 
 .option-letter {
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
-  border: 1.5px solid #1a1a1a;
-  border-radius: 50%;
+  min-width: 16px;
   text-align: center;
-  line-height: 20px;
-  font-size: 10.5pt;
+  font-size: 11pt;
   font-weight: 700;
   margin-top: 1px;
 }
@@ -93,10 +90,14 @@ img {
 .option-img {
   display: block;
   flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
 }
 
 .option-text {
   flex: 0 1 auto;
+  min-width: 0;
   padding-top: 1px;
 }
 
@@ -104,6 +105,8 @@ img {
   display: inline-flex;
   align-items: flex-start;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .answer-key {
@@ -146,6 +149,9 @@ img {
 .key-option-img {
   display: inline-block;
   vertical-align: middle;
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
 }
 
 .key-explanation {
