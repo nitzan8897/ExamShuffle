@@ -47,7 +47,9 @@ RUN npx puppeteer browsers install chrome-headless-shell
 COPY . .
 RUN npm run build
 
+# Port 7860 is the Hugging Face Spaces convention; Railway injects its own $PORT
+# at runtime which overrides this, and the server reads process.env.PORT.
 ENV NODE_ENV=production
-ENV PORT=3000
-EXPOSE 3000
+ENV PORT=7860
+EXPOSE 7860
 CMD ["npm", "start"]
